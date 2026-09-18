@@ -1,0 +1,28 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+
+# production
+/build
+
+# local environment
+.env
+.env.local
+.env.*.local
+
+# logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# misc
+.DS_Store
+*.pem
+*.tsbuildinfo
+
+# Supabase local state
+/supabase/.branches
+/supabase/.temp

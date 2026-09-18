@@ -1,0 +1,48 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  background: #faf7ed;
+  color: #1e2438;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: #faf7ed;
+  color: #1e2438;
+  font-family: "Times New Roman", Times, serif;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+@layer components {
+  .panel {
+    @apply rounded-[14px] border border-line bg-white p-6 shadow-card;
+  }
+
+  .eyebrow {
+    @apply text-xs font-bold uppercase tracking-[0.18em] text-son;
+  }
+
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-[40px] bg-son px-5 py-3 text-sm font-bold text-white transition hover:bg-son/90;
+  }
+
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-[40px] border border-lineStrong bg-white px-5 py-3 text-sm font-bold text-chamDeep transition hover:border-son hover:text-son;
+  }
+}

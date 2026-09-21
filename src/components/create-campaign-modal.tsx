@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { slugify } from "@/lib/utils/slugify";
+import { createOrganizationCampaign } from "@/app/organization/actions";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
 
 type CampaignType = "direct" | "partner";
@@ -14,7 +13,7 @@ const typeOptions: { value: CampaignType; icon: string; name: string; desc: stri
   { value: "partner", icon: "\u{1F517}", name: "Kết nối", desc: "Chuyển thẳng đến đối tác. E-Receipt tự động qua Webhook." },
 ];
 
-export function CreateCampaignModal() {
+export function CreateCampaignModal({ disabled = false, disabledReason }: { disabled?: boolean; disabledReason?: string }) {
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
@@ -36,70 +35,20 @@ export function CreateCampaignModal() {
   async function handleSubmit(formData: FormData) {
     setLoading(true);
     setError(null);
-
-    const title = String(formData.get("title") ?? "").trim();
-    const targetAmount = Number(formData.get("targetAmount") ?? 0);
-    const deadline = String(formData.get("deadline") ?? "");
-    const category = String(formData.get("category") ?? "");
-    const description = String(formData.get("description") ?? "").trim();
-
-    if (!title || !targetAmount || targetAmount <= 0) {
+    formData.set("campaignType", type);
+    try {
+      const result = await createOrganizationCampaign(formData);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      setSuccess(true);
+      router.refresh();
+    } catch {
+      setError("Phiên đăng nhập không hợp lệ hoặc bạn không có quyền tạo chiến dịch.");
+    } finally {
       setLoading(false);
-      setError("Vui lòng điền tên chiến dịch và mục tiêu hợp lệ.");
-      return;
     }
-
-    const supabase = createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      setLoading(false);
-      setError("Cần đăng nhập bằng tài khoản Tổ chức trước khi tạo chiến dịch (bấm “Đăng nhập” trên thanh menu).");
-      return;
-    }
-
-    const { data: org, error: orgError } = await supabase
-      .from("organizations")
-      .select("id, license_status")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (orgError || !org) {
-      setLoading(false);
-      setError("Chỉ tài khoản Doanh nghiệp/Tổ chức mới tạo được chiến dịch.");
-      return;
-    }
-
-    if (org.license_status !== "approved") {
-      setLoading(false);
-      setError("Tổ chức của bạn chưa được Admin duyệt giấy phép hoạt động — chưa thể tạo chiến dịch.");
-      return;
-    }
-
-    const { error: insertError } = await supabase.from("campaigns").insert({
-      organization_id: org.id,
-      title,
-      slug: slugify(title),
-      summary: description,
-      description,
-      target_amount: targetAmount,
-      campaign_type: type,
-      category: category || null,
-      deadline: deadline || null,
-      status: "draft",
-    });
-
-    setLoading(false);
-
-    if (insertError) {
-      setError(insertError.message);
-      return;
-    }
-
-    setSuccess(true);
-    router.refresh();
   }
 
   return (
@@ -107,7 +56,9 @@ export function CreateCampaignModal() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="rounded-[40px] bg-chamDeep px-4 py-2 text-[13px] font-bold text-white transition hover:bg-chamDeep/90"
+        disabled={disabled}
+        title={disabled ? disabledReason : undefined}
+        className="rounded-[40px] bg-chamDeep px-4 py-2 text-[13px] font-bold text-white transition hover:bg-chamDeep/90 disabled:cursor-not-allowed disabled:opacity-45"
       >
         Tạo chiến dịch
       </button>
@@ -135,7 +86,7 @@ export function CreateCampaignModal() {
 
                 {success ? (
                   <div className="mt-6 rounded-[8px] bg-lua/10 p-4 text-sm text-lua">
-                    Đã gửi hồ sơ! Chúng tôi sẽ xem xét trong 3–5 ngày làm việc.
+                    Đã tạo bản nháp. Bạn có thể gửi chiến dịch xét duyệt trong Cổng tổ chức.
                     <button type="button" onClick={close} className="button-primary mt-4 w-full">
                       Đóng
                     </button>

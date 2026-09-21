@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { AuthControls } from "./auth-controls";
 import { CreateCampaignModal } from "./create-campaign-modal";
 import { getCurrentAuth } from "@/lib/auth/server";
+import { createClient } from "@/lib/supabase/server";
 
 const navLinks = [
   ["Ủng hộ", "/"],
@@ -20,6 +21,16 @@ export async function SiteHeader() {
   const roleLabel = role
     ? { donor: "Nhà hảo tâm", org: "Tổ chức", rescue_team: "Đội cứu trợ", admin: "Quản trị viên" }[role]
     : undefined;
+  let canCreateCampaign = false;
+  if (role === "org" && user) {
+    const supabase = createClient();
+    const { data: organization } = await supabase
+      .from("organizations")
+      .select("license_status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    canCreateCampaign = organization?.license_status === "approved";
+  }
   const roleLinks = [
     ...(role === "org" ? [["Quản lý tổ chức", "/organization"]] : []),
     ...(role === "rescue_team" || role === "admin" ? [["Điều phối cứu trợ", "/rescue/operations"]] : []),
@@ -53,7 +64,7 @@ export async function SiteHeader() {
               roleLabel={roleLabel}
             />
           </Suspense>
-          {role === "org" ? <CreateCampaignModal /> : null}
+          {canCreateCampaign ? <CreateCampaignModal /> : null}
         </div>
       </nav>
     </header>

@@ -41,6 +41,51 @@ Migration tạo schema, trigger onboarding và RLS. Sau khi tạo Supabase proje
 2. Chạy migration bằng Supabase CLI hoặc SQL Editor.
 3. Tạo Admin nội bộ bằng công cụ bảo mật; không thêm lựa chọn Admin vào form đăng ký.
 
+### Migration và dữ liệu demo
+
+Các migration trong `supabase/migrations` chỉ chứa schema, trigger và RLS dùng được cho production. Không đặt tài khoản hoặc mật khẩu mẫu trong migration.
+
+Kiểm tra và áp dụng theo đúng thứ tự:
+
+```bash
+supabase migration list
+supabase db push
+```
+
+Migration seed cũ `202609210001_seed_demo_accounts.sql` đã được loại khỏi lịch sử vì ghi trực tiếp vào schema nội bộ `auth` và có thể không tương thích giữa các phiên bản Supabase.
+
+Sau khi chạy toàn bộ migration trên môi trường development/staging, có thể tạo lại dữ liệu demo bằng Admin API:
+
+1. Điền `SUPABASE_SERVICE_ROLE_KEY` vào `.env.local` và tuyệt đối không đưa khóa này lên Git hoặc client bundle.
+2. Đặt `DEMO_SEED_ENABLED=true`.
+3. Chạy:
+
+```bash
+npm run seed:demo
+```
+
+Script có thể chạy lại nhiều lần: tài khoản đã tồn tại sẽ được cập nhật thay vì tạo trùng. Không bật hoặc chạy script này trên production.
+
+### Cloudinary cho hồ sơ tổ chức
+
+Cổng tổ chức upload ảnh đại diện và giấy phép qua signed Upload API ở phía server. Tạo một Cloudinary product environment rồi thêm vào `.env.local`:
+
+```env
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+```
+
+Không thêm tiền tố `NEXT_PUBLIC_` cho `CLOUDINARY_API_SECRET` và không commit giá trị thật. Giấy phép nhận PDF/JPG/PNG/WebP tối đa 10 MB; ảnh đại diện nhận JPG/PNG/WebP tối đa 5 MB. Migration `202609210004_organization_portal.sql` phải được áp dụng trước khi sử dụng dashboard.
+
+Cấu trúc thư mục trong Cloudinary Media Library:
+
+```text
+thiennguyen/
+├── avatars/   # Ảnh đại diện tổ chức
+└── licenses/  # PDF/ảnh giấy phép hoạt động
+```
+
 ## Các quyết định chưa hard-code
 
 - Phương thức chữ ký/approval của người đại diện.
@@ -50,6 +95,9 @@ Migration tạo schema, trigger onboarding và RLS. Sau khi tạo Supabase proje
 - Phân cấp Admin và phạm vi audit log.
 
 ## Các tài khoản demo
+
+Chỉ dùng trên development/staging. Mật khẩu chung: `123456`.
+
 | Tài khoản | Role |
 |---|---|
 | `admin@demo.vn` | `admin` |

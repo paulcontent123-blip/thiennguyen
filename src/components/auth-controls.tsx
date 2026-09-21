@@ -35,6 +35,7 @@ export function AuthControls({ isAuthenticated = false, email, username = "Tài 
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [accountMenuError, setAccountMenuError] = useState<string | null>(null);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -104,6 +105,7 @@ export function AuthControls({ isAuthenticated = false, email, username = "Tài 
 
     const role = isAppRole(profile?.role) ? profile.role : null;
     if (profileError || !role) {
+      await supabase.auth.signOut();
       setLoading(false);
       setError("Đăng nhập thành công nhưng không thể xác định quyền tài khoản.");
       return;
@@ -166,9 +168,14 @@ export function AuthControls({ isAuthenticated = false, email, username = "Tài 
 
   async function handleLogout() {
     setLoading(true);
+    setAccountMenuError(null);
     const supabase = createClient();
-    await supabase.auth.signOut();
+    const { error: signOutError } = await supabase.auth.signOut();
     setLoading(false);
+    if (signOutError) {
+      setAccountMenuError("Không thể đăng xuất. Vui lòng thử lại.");
+      return;
+    }
     router.push("/");
     router.refresh();
   }
@@ -181,7 +188,10 @@ export function AuthControls({ isAuthenticated = false, email, username = "Tài 
           title={email}
           aria-haspopup="menu"
           aria-expanded={accountMenuOpen}
-          onClick={() => setAccountMenuOpen((current) => !current)}
+          onClick={() => {
+            setAccountMenuError(null);
+            setAccountMenuOpen((current) => !current);
+          }}
           className="flex max-w-[220px] items-center gap-2 rounded-[40px] border border-lineStrong py-1.5 pl-1.5 pr-3 text-left transition hover:border-son"
         >
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-chamDeep text-sm font-bold uppercase text-white">
@@ -199,6 +209,7 @@ export function AuthControls({ isAuthenticated = false, email, username = "Tài 
             <div className="border-b border-line px-4 py-2.5">
               <p className="truncate text-xs font-bold text-chamDeep">{username}</p>
               <p className="mt-0.5 truncate text-[11px] text-inkSoft">{email}</p>
+              {accountMenuError ? <p className="mt-2 text-[11px] text-son">{accountMenuError}</p> : null}
             </div>
             <Link
               href="/account"

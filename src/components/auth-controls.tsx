@@ -1,14 +1,23 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { isPublicRegistrationRole } from "@/lib/auth/roles";
+import { allowedRolesForPath } from "@/lib/auth/permissions";
+import { isAppRole, isPublicRegistrationRole } from "@/lib/auth/roles";
 
 type Tab = "login" | "register";
 
-export function AuthControls() {
+type AuthControlsProps = {
+  isAuthenticated?: boolean;
+  email?: string;
+  username?: string;
+  roleLabel?: string;
+};
+
+export function AuthControls({ isAuthenticated = false, email, username = "Tài khoản", roleLabel }: AuthControlsProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -25,6 +34,27 @@ export function AuthControls() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (!accountMenuRef.current?.contains(event.target as Node)) setAccountMenuOpen(false);
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    }
+
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountMenuOpen]);
 
   // /login và /register vẫn là URL thật (middleware redirect tới /login?next=... khi chặn route),
   // nên khi vào đúng 2 đường dẫn này thì tự mở modal ở đúng tab tương ứng.
@@ -58,18 +88,42 @@ export function AuthControls() {
     const password = String(formData.get("password") ?? "");
 
     const supabase = createClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
 
     if (signInError) {
+      setLoading(false);
       setError("Email hoặc mật khẩu không đúng");
       return;
     }
 
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", signInData.user.id)
+      .maybeSingle();
+
+    const role = isAppRole(profile?.role) ? profile.role : null;
+    if (profileError || !role) {
+      setLoading(false);
+      setError("Đăng nhập thành công nhưng không thể xác định quyền tài khoản.");
+      return;
+    }
+
     const next = searchParams.get("next");
+    const isSafeInternalPath = Boolean(next?.startsWith("/") && !next.startsWith("//"));
+    const nextRoles = next && isSafeInternalPath ? allowedRolesForPath(next) : null;
+
+    let destination = "/account";
+    if (role === "admin") {
+      destination = "/admin";
+    } else if (next && isSafeInternalPath && (!nextRoles || (role && nextRoles.includes(role)))) {
+      destination = next;
+    }
+
+    setLoading(false);
     closeModal();
+    router.push(destination);
     router.refresh();
-    router.push(next && next.startsWith("/") ? next : "/account");
   }
 
   async function handleRegister(formData: FormData) {
@@ -108,6 +162,65 @@ export function AuthControls() {
 
     setNotice("Đã tạo tài khoản! Kiểm tra email để xác nhận trước khi đăng nhập.");
     setTab("login");
+  }
+
+  async function handleLogout() {
+    setLoading(true);
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setLoading(false);
+    router.push("/");
+    router.refresh();
+  }
+
+  if (isAuthenticated) {
+    return (
+      <div ref={accountMenuRef} className="relative">
+        <button
+          type="button"
+          title={email}
+          aria-haspopup="menu"
+          aria-expanded={accountMenuOpen}
+          onClick={() => setAccountMenuOpen((current) => !current)}
+          className="flex max-w-[220px] items-center gap-2 rounded-[40px] border border-lineStrong py-1.5 pl-1.5 pr-3 text-left transition hover:border-son"
+        >
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-chamDeep text-sm font-bold uppercase text-white">
+            {username.trim().charAt(0) || "U"}
+          </span>
+          <span className="min-w-0">
+            <span className="block truncate text-[13px] font-bold text-chamDeep">{username}</span>
+            {roleLabel ? <span className="block truncate text-[11px] text-inkSoft">{roleLabel}</span> : null}
+          </span>
+          <span className={`ml-1 text-[10px] text-inkSoft transition ${accountMenuOpen ? "rotate-180" : ""}`}>▼</span>
+        </button>
+
+        {accountMenuOpen ? (
+          <div role="menu" className="absolute right-0 top-[calc(100%+8px)] z-50 w-52 overflow-hidden rounded-[10px] border border-line bg-white py-1.5 shadow-modal">
+            <div className="border-b border-line px-4 py-2.5">
+              <p className="truncate text-xs font-bold text-chamDeep">{username}</p>
+              <p className="mt-0.5 truncate text-[11px] text-inkSoft">{email}</p>
+            </div>
+            <Link
+              href="/account"
+              role="menuitem"
+              onClick={() => setAccountMenuOpen(false)}
+              className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-inkMid transition hover:bg-paper hover:text-son"
+            >
+              <span aria-hidden>👤</span> Tài khoản
+            </Link>
+            <button
+              type="button"
+              role="menuitem"
+              onClick={handleLogout}
+              disabled={loading}
+              className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm font-semibold text-son transition hover:bg-son/5 disabled:cursor-wait disabled:opacity-60"
+            >
+              <span aria-hidden>↪</span> {loading ? "Đang đăng xuất…" : "Đăng xuất"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
   }
 
   return (

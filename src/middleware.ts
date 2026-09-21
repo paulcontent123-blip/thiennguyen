@@ -9,7 +9,9 @@ export async function middleware(request: NextRequest) {
 
   if (!hasSupabaseEnv()) {
     if (allowedRoles) {
-      return NextResponse.redirect(new URL("/login?message=Supabase%20chưa%20được%20cấu%20hình", request.url));
+      const loginUrl = new URL("/login", request.url);
+      loginUrl.searchParams.set("message", "Supabase chưa được cấu hình");
+      return NextResponse.redirect(loginUrl);
     }
     return NextResponse.next();
   }
@@ -25,7 +27,9 @@ export async function middleware(request: NextRequest) {
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
   if (!isAppRole(profile?.role) || !allowedRoles.includes(profile.role)) {
-    return NextResponse.redirect(new URL("/?error=forbidden", request.url));
+    const forbiddenUrl = new URL("/forbidden", request.url);
+    forbiddenUrl.searchParams.set("from", request.nextUrl.pathname);
+    return NextResponse.redirect(forbiddenUrl);
   }
 
   return response;

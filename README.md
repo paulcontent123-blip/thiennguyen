@@ -48,3 +48,11 @@ Migration tạo schema, trigger onboarding và RLS. Sau khi tạo Supabase proje
 - Invitation cứu trợ là invitation-only hay sau bước duyệt application.
 - Chính sách một hay nhiều đội cùng xử lý một SOS.
 - Phân cấp Admin và phạm vi audit log.
+
+## Các tài khoản demo
+| Tài khoản | Role |
+|---|---|
+| `admin@demo.vn` | `admin` |
+| `donor@demo.vn` | `donor` |
+| `org@demo.vn` | `org` |
+| `rescue_team@demo.vn` | `rescue_team` |

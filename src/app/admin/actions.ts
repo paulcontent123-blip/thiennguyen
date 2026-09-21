@@ -1,29 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { requireActionRole } from "@/lib/auth/server";
 
 function assertMutationSucceeded(error: { message: string } | null, fallbackMessage: string) {
   if (error) throw new Error(error.message || fallbackMessage);
 }
 
 async function requireAdmin() {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) throw new Error("Chưa đăng nhập.");
-
-  const { data: profile, error: profileError } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profileError) throw new Error("Không thể xác minh quyền truy cập.");
-  if (profile?.role !== "admin") throw new Error("Bạn không có quyền quản trị.");
-
-  return { supabase, user };
+  return requireActionRole(["admin"]);
 }
 
 export async function approveCampaign(id: string) {

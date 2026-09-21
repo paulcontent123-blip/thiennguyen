@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   approveCampaign,
   approveOrganization,
@@ -14,6 +15,7 @@ import {
   requestCampaignRevision,
   requestOrganizationRevision,
 } from "@/app/admin/actions";
+import { createClient } from "@/lib/supabase/client";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
 type Related<T> = T | T[] | null;
@@ -196,9 +198,28 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
 }
 
 export function AdminPortal({ campaigns, organizations, disbursements, rescueApplications, sosReports }: { campaigns: Campaign[]; organizations: Organization[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; sosReports: SosReport[] }) {
+  const router = useRouter();
   const [panel, setPanel] = useState<Panel>("overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
   const [auditFilter, setAuditFilter] = useState<AuditFilter>("pending");
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    setLogoutError(null);
+
+    const supabase = createClient();
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setLoggingOut(false);
+      setLogoutError("Không thể đăng xuất. Vui lòng thử lại.");
+      return;
+    }
+
+    router.replace("/");
+    router.refresh();
+  }
 
   const pendingCampaigns = campaigns.filter((campaign) => campaign.status === "pending_review").length;
   const pendingOrganizations = organizations.filter((organization) => organization.license_status === "pending").length;
@@ -236,12 +257,18 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
 
   return (
     <div className="min-h-screen bg-paperMid lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="bg-chamDeep px-3 py-5 text-white lg:min-h-screen lg:px-0 lg:py-6">
+      <aside className="flex flex-col bg-chamDeep px-3 py-5 text-white lg:min-h-screen lg:px-0 lg:py-6">
         <div className="border-b border-white/10 px-2 pb-4 lg:px-5"><div className="text-sm text-white/65">Thiện Nguyện</div><strong className="font-serif text-[17px]">Admin Portal</strong></div>
         <nav className="flex gap-1 overflow-x-auto pt-3 lg:flex-col lg:gap-0 lg:px-0">
           {navItems.map((item) => <button key={item.key} type="button" onClick={() => setPanel(item.key)} className={`flex shrink-0 items-center gap-2.5 border-l-[3px] px-3 py-2.5 text-left text-[13px] transition lg:px-5 ${panel === item.key ? "border-l-son bg-white/10 font-bold text-white" : "border-l-transparent text-white/65 hover:bg-white/[0.06] hover:text-white"}`}><span className="w-[18px] text-center">{item.icon}</span>{item.label}</button>)}
         </nav>
-        <div className="mt-4 border-t border-white/10 pt-3 lg:mt-6 lg:px-3 lg:pt-4"><Link href="/" className="flex items-center gap-2.5 px-2 py-2.5 text-[13px] text-white/65 transition hover:text-white"><span className="w-[18px] text-center">←</span>Về trang chủ</Link></div>
+        <div className="mt-4 border-t border-white/10 pt-3 lg:mt-auto lg:px-3 lg:pt-4">
+          <Link href="/" className="flex items-center gap-2.5 px-2 py-2.5 text-[13px] text-white/65 transition hover:text-white"><span className="w-[18px] text-center">←</span>Về trang chủ</Link>
+          <button type="button" onClick={handleLogout} disabled={loggingOut} className="flex w-full items-center gap-2.5 rounded-[4px] px-2 py-2.5 text-left text-[13px] font-bold text-white/75 transition hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-60">
+            <span className="w-[18px] text-center">↪</span>{loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}
+          </button>
+          {logoutError ? <p className="px-2 pt-1 text-xs text-red-300">{logoutError}</p> : null}
+        </div>
       </aside>
 
       <main className="min-w-0 bg-paper p-4 sm:p-6 lg:p-[30px]">

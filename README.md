@@ -86,6 +86,40 @@ thiennguyen/
 └── licenses/  # PDF/ảnh giấy phép hoạt động
 ```
 
+### Email qua Resend
+
+Mặc định ứng dụng dùng `EmailProvider` với `EMAIL_PROVIDER=resend`. Provider Resend gửi email nghiệp vụ bằng REST API; provider SendGrid đã có cùng interface để có thể chuyển bằng biến môi trường mà không sửa các luồng nghiệp vụ.
+
+Thêm vào `.env.local`:
+
+```env
+EMAIL_PROVIDER=resend
+EMAIL_FROM=Thiện Nguyện <no-reply@your-domain.vn>
+RESEND_API_KEY=re_xxxxxxxxx
+```
+
+API key chỉ nên có quyền sending và không được đưa vào client bundle hoặc commit lên Git. Domain gửi email phải được verify trên Resend trước khi dùng địa chỉ `EMAIL_FROM` thật.
+
+Supabase Auth dùng cùng Resend qua Custom SMTP để gửi xác nhận email, OTP, reset mật khẩu và invitation:
+
+```text
+Host: smtp.resend.com
+Port: 465
+Username: resend
+Password: RESEND_API_KEY
+Sender: EMAIL_FROM
+```
+
+OTP vẫn do Supabase Auth phát hành và xác thực; Resend chỉ đảm nhiệm vận chuyển email. Các hàm email nghiệp vụ nằm ở `src/lib/email/notifications.ts`, gồm biên nhận PDF và cập nhật chiến dịch.
+
+Khi cần chuyển sang SendGrid, đổi cấu hình:
+
+```env
+EMAIL_PROVIDER=sendgrid
+SENDGRID_API_KEY=sg_xxxxxxxxx
+SENDGRID_FROM_EMAIL=Thiện Nguyện <no-reply@your-domain.vn>
+```
+
 ## Các quyết định chưa hard-code
 
 - Phương thức chữ ký/approval của người đại diện.

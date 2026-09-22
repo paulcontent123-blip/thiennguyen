@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { requireActionRole } from "@/lib/auth/server";
+import { sendCampaignUpdateEmail } from "@/lib/email/notifications";
+import { createClient } from "@/lib/supabase/server";
 
 function assertMutationSucceeded(error: { message: string } | null, fallbackMessage: string) {
   if (error) throw new Error(error.message || fallbackMessage);
@@ -11,36 +13,120 @@ async function requireAdmin() {
   return requireActionRole(["admin"]);
 }
 
+async function notifyCampaignOwner(
+  supabase: ReturnType<typeof createClient>,
+  campaign: { id: string; title: string; organization_id: string },
+  status: string,
+  statusLabel: string,
+  note?: string | null,
+) {
+  const { data: organization } = await supabase
+    .from("organizations")
+    .select("legal_representative_email")
+    .eq("id", campaign.organization_id)
+    .maybeSingle();
+  const recipient = organization?.legal_representative_email?.trim();
+  if (!recipient) return;
+
+  try {
+    await sendCampaignUpdateEmail({
+      to: recipient,
+      campaignId: campaign.id,
+      campaignTitle: campaign.title,
+      status,
+      statusLabel,
+      note,
+      campaignUrl: `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/organization/campaigns/${campaign.id}`,
+    });
+  } catch (error) {
+    console.error("Campaign update email failed", { campaignId: campaign.id, status, error });
+  }
+}
+
 export async function approveCampaign(id: string) {
   const { supabase, user } = await requireAdmin();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("campaigns")
     .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: user.id, review_note: null })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "pending_review")
+    .select("id, title, organization_id")
+    .maybeSingle();
   assertMutationSucceeded(error, "Không thể duyệt chiến dịch.");
+  if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
+  await notifyCampaignOwner(supabase, data, "approved", "Đã duyệt");
   revalidatePath("/admin");
+  revalidatePath("/organization");
 }
 
 export async function requestCampaignRevision(id: string, formData: FormData) {
   const { supabase, user } = await requireAdmin();
   const note = String(formData.get("note") ?? "").trim();
-  const { error } = await supabase
+  if (!note) throw new Error("Cần nhập lý do yêu cầu chỉnh sửa.");
+  const { data, error } = await supabase
     .from("campaigns")
-    .update({ status: "needs_revision", reviewed_at: new Date().toISOString(), reviewed_by: user.id, review_note: note || null })
-    .eq("id", id);
+    .update({ status: "needs_revision", reviewed_at: new Date().toISOString(), reviewed_by: user.id, review_note: note })
+    .eq("id", id)
+    .eq("status", "pending_review")
+    .select("id, title, organization_id")
+    .maybeSingle();
   assertMutationSucceeded(error, "Không thể yêu cầu bổ sung chiến dịch.");
+  if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
+  await notifyCampaignOwner(supabase, data, "needs_revision", "Cần chỉnh sửa", note);
   revalidatePath("/admin");
+  revalidatePath("/organization");
 }
 
 export async function rejectCampaign(id: string, formData: FormData) {
   const { supabase, user } = await requireAdmin();
   const note = String(formData.get("note") ?? "").trim();
-  const { error } = await supabase
+  if (!note) throw new Error("Cần nhập lý do từ chối chiến dịch.");
+  const { data, error } = await supabase
     .from("campaigns")
-    .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user.id, review_note: note || null })
-    .eq("id", id);
+    .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user.id, review_note: note })
+    .eq("id", id)
+    .eq("status", "pending_review")
+    .select("id, title, organization_id")
+    .maybeSingle();
   assertMutationSucceeded(error, "Không thể từ chối chiến dịch.");
+  if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
+  await notifyCampaignOwner(supabase, data, "rejected", "Từ chối", note);
   revalidatePath("/admin");
+  revalidatePath("/organization");
+}
+
+export async function activateCampaign(id: string) {
+  const { supabase } = await requireAdmin();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update({ status: "active", published_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "approved")
+    .select("id, title, organization_id")
+    .maybeSingle();
+  assertMutationSucceeded(error, "Không thể kích hoạt chiến dịch.");
+  if (!data) throw new Error("Chiến dịch không còn ở trạng thái đã duyệt.");
+  await notifyCampaignOwner(supabase, data, "active", "Đang hoạt động");
+  revalidatePath("/admin");
+  revalidatePath("/organization");
+  revalidatePath("/");
+}
+
+export async function closeCampaign(id: string) {
+  const { supabase } = await requireAdmin();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update({ status: "closed" })
+    .eq("id", id)
+    .eq("status", "active")
+    .select("id, title, organization_id")
+    .maybeSingle();
+  assertMutationSucceeded(error, "Không thể đóng chiến dịch.");
+  if (!data) throw new Error("Chiến dịch không còn ở trạng thái hoạt động.");
+  await notifyCampaignOwner(supabase, data, "closed", "Đã đóng");
+  revalidatePath("/admin");
+  revalidatePath("/organization");
+  revalidatePath("/");
 }
 
 export async function approveOrganization(id: string) {

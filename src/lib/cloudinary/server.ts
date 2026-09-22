@@ -69,3 +69,9 @@ export async function destroyCloudinaryAsset(publicId: string | null | undefined
     body,
   });
 }
+
+export function buildCloudinaryDerivedImageUrl(publicId: string, transformation = "c_fill,w_1080,h_1920,g_auto,q_auto,f_auto") {
+  const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
+  if (!cloudName) throw new Error("Cloudinary chưa được cấu hình trên server.");
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${transformation}/${publicId}`;
+}

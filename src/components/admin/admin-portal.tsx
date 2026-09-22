@@ -4,7 +4,9 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  activateCampaign,
   approveCampaign,
+  closeCampaign,
   approveOrganization,
   approveRescueApplication,
   markSosHandled,
@@ -26,9 +28,20 @@ type Campaign = {
   campaign_type: "direct" | "partner" | string;
   target_amount: number | string;
   status: string;
+  review_note: string | null;
   submitted_at: string | null;
+  reviewed_at: string | null;
   created_at: string;
   organizations: Related<{ name: string }>;
+  campaign_status_history: Array<{
+    id: number;
+    from_status: string | null;
+    to_status: string;
+    actor_name: string;
+    actor_role: string | null;
+    note: string | null;
+    created_at: string;
+  }>;
 };
 
 type Organization = {
@@ -129,6 +142,29 @@ function Pill({ status }: { status: string }) {
   return <span className={`inline-flex rounded-[4px] px-2 py-0.5 text-xs font-bold ${item.className}`}>{item.label}</span>;
 }
 
+function CampaignHistory({ campaign }: { campaign: Campaign }) {
+  const events = [...(campaign.campaign_status_history ?? [])].sort(
+    (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
+  );
+  return (
+    <details className="mt-2 text-xs">
+      <summary className="cursor-pointer font-bold text-sky">Lịch sử trạng thái ({events.length})</summary>
+      <ol className="mt-2 space-y-2 border-l border-line pl-3">
+        {events.map((event) => (
+          <li key={event.id}>
+            <div className="font-semibold text-chamDeep">
+              {event.from_status ? `${statusPill[event.from_status]?.label ?? event.from_status} → ` : "Khởi tạo → "}
+              {statusPill[event.to_status]?.label ?? event.to_status}
+            </div>
+            <div className="text-inkSoft">{event.actor_name} ({event.actor_role ?? "system"}) · {fmtDate(event.created_at)}</div>
+            {event.note ? <div className="mt-0.5 text-son">{event.note}</div> : null}
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
 function ReviewActions({
   approveAction,
   reviseAction,
@@ -141,12 +177,11 @@ function ReviewActions({
   reviseLabel?: string;
 }) {
   return (
-    <form className="flex flex-wrap items-center gap-2">
-      {reviseAction ? <input name="note" placeholder="Ghi chú nếu cần" className="w-40 rounded-[4px] border border-line px-2 py-1 text-xs outline-none focus:border-son" /> : null}
-      <button formAction={approveAction} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white transition hover:bg-lua/90">Duyệt</button>
-      {reviseAction ? <button formAction={reviseAction} className="rounded-[4px] bg-sky/15 px-3 py-1.5 text-xs font-bold text-sky transition hover:bg-sky/25">{reviseLabel}</button> : null}
-      <button formAction={rejectAction} className="rounded-[4px] bg-son/15 px-3 py-1.5 text-xs font-bold text-son transition hover:bg-son/25">Từ chối</button>
-    </form>
+    <div className="grid gap-2">
+      <form action={approveAction}><button className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white transition hover:bg-lua/90">Duyệt</button></form>
+      {reviseAction ? <form action={reviseAction} className="flex items-center gap-2"><input name="note" required placeholder="Lý do cần bổ sung" className="w-40 rounded-[4px] border border-line px-2 py-1 text-xs outline-none focus:border-son" /><button className="rounded-[4px] bg-sky/15 px-3 py-1.5 text-xs font-bold text-sky transition hover:bg-sky/25">{reviseLabel}</button></form> : null}
+      <form action={rejectAction} className="flex items-center gap-2"><input name="note" required placeholder="Lý do từ chối" className="w-40 rounded-[4px] border border-line px-2 py-1 text-xs outline-none focus:border-son" /><button className="rounded-[4px] bg-son/15 px-3 py-1.5 text-xs font-bold text-son transition hover:bg-son/25">Từ chối</button></form>
+    </div>
   );
 }
 
@@ -293,7 +328,7 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
 
         {panel === "campaigns" ? <section>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h1 className="font-serif text-[21px] font-medium text-chamDeep">Duyệt chiến dịch</h1><div className="flex flex-wrap gap-1.5">{[["all", `Tất cả (${campaigns.length})`], ["pending_review", `Chờ (${campaigns.filter((c) => c.status === "pending_review").length})`], ["needs_revision", `Cần bổ sung (${campaigns.filter((c) => c.status === "needs_revision").length})`], ["approved", `Đã duyệt (${campaigns.filter((c) => ["approved", "active", "closed"].includes(c.status)).length})`]].map(([value, label]) => <button key={value} type="button" onClick={() => setCampaignFilter(value as CampaignFilter)} className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${campaignFilter === value ? "border-son text-son" : "border-lineStrong text-inkMid hover:border-son hover:text-son"}`}>{label}</button>)}</div></div>
-          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[900px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Tổ chức</th><th className="px-3 py-2.5">Loại</th><th className="px-3 py-2.5">Mục tiêu</th><th className="px-3 py-2.5">Ngày gửi</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{filteredCampaigns.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-inkSoft">Không có chiến dịch nào.</td></tr> : filteredCampaigns.map((campaign) => <tr key={campaign.id} className="border-t border-line align-top"><td className="px-3 py-3 font-semibold text-chamDeep">{campaign.title}</td><td className="px-3 py-3 text-inkMid">{firstRelated(campaign.organizations)?.name ?? "—"}</td><td className="px-3 py-3 text-inkMid">{campaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối"}</td><td className="px-3 py-3 font-mono font-bold text-son">{amount(campaign.target_amount)}</td><td className="px-3 py-3 text-xs text-inkSoft">{fmtDate(campaign.submitted_at ?? campaign.created_at)}</td><td className="px-3 py-3"><Pill status={campaign.status} /></td><td className="px-3 py-3">{campaign.status === "pending_review" || campaign.status === "needs_revision" ? <ReviewActions approveAction={approveCampaign.bind(null, campaign.id)} reviseAction={requestCampaignRevision.bind(null, campaign.id)} rejectAction={rejectCampaign.bind(null, campaign.id)} /> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[900px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Tổ chức</th><th className="px-3 py-2.5">Loại</th><th className="px-3 py-2.5">Mục tiêu</th><th className="px-3 py-2.5">Ngày gửi</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{filteredCampaigns.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-inkSoft">Không có chiến dịch nào.</td></tr> : filteredCampaigns.map((campaign) => <tr key={campaign.id} className="border-t border-line align-top"><td className="px-3 py-3"><div className="font-semibold text-chamDeep">{campaign.title}</div>{campaign.review_note ? <div className="mt-1 text-xs text-son">Lý do: {campaign.review_note}</div> : null}<CampaignHistory campaign={campaign} /></td><td className="px-3 py-3 text-inkMid">{firstRelated(campaign.organizations)?.name ?? "—"}</td><td className="px-3 py-3 text-inkMid">{campaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối"}</td><td className="px-3 py-3 font-mono font-bold text-son">{amount(campaign.target_amount)}</td><td className="px-3 py-3 text-xs text-inkSoft">{fmtDate(campaign.submitted_at ?? campaign.created_at)}</td><td className="px-3 py-3"><Pill status={campaign.status} /></td><td className="px-3 py-3">{campaign.status === "pending_review" ? <ReviewActions approveAction={approveCampaign.bind(null, campaign.id)} reviseAction={requestCampaignRevision.bind(null, campaign.id)} rejectAction={rejectCampaign.bind(null, campaign.id)} /> : campaign.status === "approved" ? <form><button formAction={activateCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Kích hoạt</button></form> : campaign.status === "active" ? <form><button formAction={closeCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-chamDeep px-3 py-1.5 text-xs font-bold text-white">Đóng chiến dịch</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
         </section> : null}
 
         {panel === "kyc" ? <section>

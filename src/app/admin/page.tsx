@@ -7,7 +7,7 @@ export default async function AdminPage() {
   const [campaignsRes, organizationsRes, disbursementsRes, rescueApplicationsRes, sosReportsRes] = await Promise.all([
     supabase
       .from("campaigns")
-      .select("id, title, campaign_type, target_amount, status, submitted_at, created_at, organizations(name)")
+      .select("id, title, campaign_type, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
       .order("created_at", { ascending: false }),
     supabase
       .from("organizations")

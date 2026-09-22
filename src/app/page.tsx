@@ -59,7 +59,7 @@ export default async function HomePage() {
       {/* HERO GRID */}
       <section className="mx-auto grid max-w-[1160px] grid-cols-1 gap-4 px-7 pt-7 md:grid-cols-[1.6fr_1fr]">
         {heroMain ? (
-          <Link href="/campaigns" className="group relative flex h-[420px] flex-col justify-end overflow-hidden rounded-[14px] bg-gradient-to-br from-[#5C3317] to-[#8B4513] p-7 text-white">
+          <Link href={`/campaigns/${encodeURIComponent(heroMain.slug)}`} className="group relative flex h-[420px] flex-col justify-end overflow-hidden rounded-[14px] bg-gradient-to-br from-[#5C3317] to-[#8B4513] p-7 text-white">
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
             <div className="relative">
               <span className="inline-block rounded-[4px] bg-white/15 px-2.5 py-1 text-xs font-bold">Chiến dịch nổi bật</span>
@@ -87,7 +87,7 @@ export default async function HomePage() {
           {[0, 1].map((i) => {
             const c = heroSub[i];
             return c ? (
-              <Link key={c.slug} href="/campaigns" className="group relative flex h-[198px] flex-col justify-end overflow-hidden rounded-[14px] bg-gradient-to-br from-[#1a4a2e] to-[#2d7a4a] p-5 text-white">
+              <Link key={c.slug} href={`/campaigns/${encodeURIComponent(c.slug)}`} className="group relative flex h-[198px] flex-col justify-end overflow-hidden rounded-[14px] bg-gradient-to-br from-[#1a4a2e] to-[#2d7a4a] p-5 text-white">
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                 <div className="relative">
                   <h3 className="font-serif text-base font-semibold leading-snug">{c.title}</h3>

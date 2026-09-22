@@ -179,6 +179,47 @@ export async function createOrganizationCampaign(formData: FormData): Promise<Or
   return { ok: true, message: "Đã tạo bản nháp chiến dịch." };
 }
 
+export async function updateOrganizationCampaign(id: string, formData: FormData): Promise<OrganizationActionResult> {
+  const { supabase, organization } = await requireOrganization();
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const category = String(formData.get("category") ?? "");
+  const campaignType = String(formData.get("campaignType") ?? "");
+  const deadline = String(formData.get("deadline") ?? "");
+  const targetAmount = Number(formData.get("targetAmount") ?? 0);
+
+  if (title.length < 5 || title.length > 180 || description.length > 5000 || !Number.isFinite(targetAmount) || targetAmount <= 0) {
+    return { ok: false, message: "Thông tin chiến dịch chưa hợp lệ." };
+  }
+  if (!CAMPAIGN_CATEGORIES.includes(category as (typeof CAMPAIGN_CATEGORIES)[number])) {
+    return { ok: false, message: "Hạng mục chiến dịch không hợp lệ." };
+  }
+  if (!["direct", "partner"].includes(campaignType)) return { ok: false, message: "Loại chiến dịch không hợp lệ." };
+
+  const { data: updatedCampaign, error } = await supabase
+    .from("campaigns")
+    .update({
+      title,
+      slug: slugify(title),
+      summary: description.slice(0, 300),
+      description,
+      target_amount: targetAmount,
+      campaign_type: campaignType,
+      category,
+      deadline: deadline || null,
+    })
+    .eq("id", id)
+    .eq("organization_id", organization.id)
+    .in("status", ["draft", "needs_revision"])
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { ok: false, message: error.message };
+  if (!updatedCampaign) return { ok: false, message: "Chỉ có thể sửa chiến dịch nháp hoặc đang cần bổ sung." };
+  revalidatePath("/organization");
+  return { ok: true, message: "Đã cập nhật nội dung chiến dịch." };
+}
+
 export async function submitCampaignForReview(id: string): Promise<OrganizationActionResult> {
   const { supabase, organization } = await requireOrganization();
   if (organization.license_status !== "approved") {
@@ -187,7 +228,7 @@ export async function submitCampaignForReview(id: string): Promise<OrganizationA
 
   const { data: updatedCampaign, error } = await supabase
     .from("campaigns")
-    .update({ status: "pending_review", submitted_at: new Date().toISOString() })
+    .update({ status: "pending_review", submitted_at: new Date().toISOString(), review_note: null })
     .eq("id", id)
     .eq("organization_id", organization.id)
     .in("status", ["draft", "needs_revision"])

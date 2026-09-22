@@ -21,7 +21,7 @@ export default async function OrganizationPage({ searchParams }: { searchParams?
   const from = (page - 1) * PAGE_SIZE;
   const { data: campaigns, count } = await supabase
     .from("campaigns")
-    .select("id, title, summary, description, campaign_type, category, target_amount, deadline, status, review_note, submitted_at, created_at", { count: "exact" })
+    .select("id, title, summary, description, campaign_type, category, province, target_amount, deadline, status, review_note, submitted_at, created_at", { count: "exact" })
     .eq("organization_id", organization.id)
     .order("created_at", { ascending: false })
     .range(from, from + PAGE_SIZE - 1);

@@ -34,7 +34,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   const supabase = createClient();
   const { data: campaign, error } = await supabase
     .from("campaigns")
-    .select("id, organization_id, slug, title, summary, description, target_amount, campaign_type, category, status, deadline, published_at, created_at")
+    .select("id, organization_id, slug, title, summary, description, target_amount, campaign_type, category, province, status, deadline, published_at, created_at")
     .eq("slug", params.slug)
     .in("status", [...PUBLIC_STATUSES])
     .maybeSingle();
@@ -152,7 +152,8 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className={`inline-flex items-center gap-1 rounded-[4px] px-2 py-1 text-[11px] font-bold ${status.className}`}>● {status.label}</span>
                 <span className="inline-flex items-center gap-1 rounded-[4px] bg-skySoft px-2 py-1 text-[11px] font-bold text-sky">{campaignType}</span>
-                {campaign.category ? <span className="inline-flex items-center gap-1 rounded-[4px] bg-paperDeep px-2 py-1 text-[11px] font-bold text-inkMid">📍 {campaign.category}</span> : null}
+                {campaign.category ? <span className="inline-flex items-center gap-1 rounded-[4px] bg-paperDeep px-2 py-1 text-[11px] font-bold text-inkMid">{campaign.category}</span> : null}
+                {campaign.province ? <span className="inline-flex items-center gap-1 rounded-[4px] bg-skySoft px-2 py-1 text-[11px] font-bold text-sky">📍 {campaign.province}</span> : null}
               </div>
               <p className="mt-4 text-[15px] leading-7 text-ink">{campaign.description || campaign.summary || "Chưa có mô tả chi tiết cho chiến dịch này."}</p>
             </section>

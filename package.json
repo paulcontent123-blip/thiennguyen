@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "seed:demo": "node --env-file=.env.local scripts/seed-demo-users.mjs"
+    "seed:demo": "node --env-file=.env.local scripts/seed-demo-users.mjs",
+    "seed:demo-campaigns": "node --env-file=.env.local scripts/seed-demo-campaigns.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

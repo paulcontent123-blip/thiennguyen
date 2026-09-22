@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireActionRole } from "@/lib/auth/server";
 import { destroyCloudinaryAsset, uploadToCloudinary } from "@/lib/cloudinary/server";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
+import { PROVINCES } from "@/lib/geo/provinces";
 import { slugify } from "@/lib/utils/slugify";
 
 export type OrganizationActionResult = { ok: true; message: string } | { ok: false; message: string };
@@ -148,6 +149,7 @@ export async function createOrganizationCampaign(formData: FormData): Promise<Or
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const category = String(formData.get("category") ?? "");
+  const province = String(formData.get("province") ?? "");
   const campaignType = String(formData.get("campaignType") ?? "");
   const deadline = String(formData.get("deadline") ?? "");
   const targetAmount = Number(formData.get("targetAmount") ?? 0);
@@ -157,6 +159,9 @@ export async function createOrganizationCampaign(formData: FormData): Promise<Or
   }
   if (!CAMPAIGN_CATEGORIES.includes(category as (typeof CAMPAIGN_CATEGORIES)[number])) {
     return { ok: false, message: "Hạng mục chiến dịch không hợp lệ." };
+  }
+  if (!PROVINCES.includes(province as (typeof PROVINCES)[number])) {
+    return { ok: false, message: "Tỉnh/thành không hợp lệ." };
   }
   if (!['direct', 'partner'].includes(campaignType)) return { ok: false, message: "Loại chiến dịch không hợp lệ." };
 
@@ -170,6 +175,7 @@ export async function createOrganizationCampaign(formData: FormData): Promise<Or
     target_amount: targetAmount,
     campaign_type: campaignType,
     category,
+    province,
     deadline: deadline || null,
     status: "draft",
   });
@@ -184,6 +190,7 @@ export async function updateOrganizationCampaign(id: string, formData: FormData)
   const title = String(formData.get("title") ?? "").trim();
   const description = String(formData.get("description") ?? "").trim();
   const category = String(formData.get("category") ?? "");
+  const province = String(formData.get("province") ?? "");
   const campaignType = String(formData.get("campaignType") ?? "");
   const deadline = String(formData.get("deadline") ?? "");
   const targetAmount = Number(formData.get("targetAmount") ?? 0);
@@ -193,6 +200,9 @@ export async function updateOrganizationCampaign(id: string, formData: FormData)
   }
   if (!CAMPAIGN_CATEGORIES.includes(category as (typeof CAMPAIGN_CATEGORIES)[number])) {
     return { ok: false, message: "Hạng mục chiến dịch không hợp lệ." };
+  }
+  if (!PROVINCES.includes(province as (typeof PROVINCES)[number])) {
+    return { ok: false, message: "Tỉnh/thành không hợp lệ." };
   }
   if (!["direct", "partner"].includes(campaignType)) return { ok: false, message: "Loại chiến dịch không hợp lệ." };
 
@@ -206,6 +216,7 @@ export async function updateOrganizationCampaign(id: string, formData: FormData)
       target_amount: targetAmount,
       campaign_type: campaignType,
       category,
+      province,
       deadline: deadline || null,
     })
     .eq("id", id)

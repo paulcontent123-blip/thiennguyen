@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createOrganizationCampaign } from "@/app/organization/actions";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
+import { PROVINCES } from "@/lib/geo/provinces";
 
 type CampaignType = "direct" | "partner";
 
@@ -140,16 +141,28 @@ export function CreateCampaignModal({ disabled = false, disabledReason }: { disa
                       </label>
                     </div>
 
-                    <label className="grid gap-1 text-sm font-semibold text-chamDeep">
-                      Hạng mục
-                      <select className="rounded-[8px] border border-line bg-white px-4 py-3 text-sm font-normal" name="category">
-                        {CAMPAIGN_CATEGORIES.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="grid gap-1 text-sm font-semibold text-chamDeep">
+                        Hạng mục
+                        <select className="rounded-[8px] border border-line bg-white px-4 py-3 text-sm font-normal" name="category">
+                          {CAMPAIGN_CATEGORIES.map((c) => (
+                            <option key={c} value={c}>
+                              {c}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                      <label className="grid gap-1 text-sm font-semibold text-chamDeep">
+                        Tỉnh/thành
+                        <select className="rounded-[8px] border border-line bg-white px-4 py-3 text-sm font-normal" name="province">
+                          {PROVINCES.map((p) => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
 
                     <label className="grid gap-1 text-sm font-semibold text-chamDeep">
                       Mô tả chiến dịch

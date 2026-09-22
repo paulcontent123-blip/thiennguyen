@@ -14,6 +14,7 @@ import {
 } from "@/app/organization/actions";
 import { CreateCampaignModal } from "@/components/create-campaign-modal";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
+import { PROVINCES } from "@/lib/geo/provinces";
 
 type Organization = {
   id: string;
@@ -36,6 +37,7 @@ type Campaign = {
   description: string;
   campaign_type: string;
   category: string | null;
+  province: string | null;
   target_amount: number | string;
   deadline: string | null;
   status: string;
@@ -192,6 +194,7 @@ export function OrganizationDashboard({ organization, campaigns, history, page, 
                       <input name="title" defaultValue={campaign.title} required minLength={5} maxLength={180} className="rounded-[6px] border border-line px-2 py-1.5 text-xs" placeholder="Tên chiến dịch" />
                       <div className="grid grid-cols-2 gap-2"><input name="targetAmount" type="number" min={1} defaultValue={campaign.target_amount} required className="rounded-[6px] border border-line px-2 py-1.5 text-xs" /><input name="deadline" type="date" defaultValue={campaign.deadline ?? ""} className="rounded-[6px] border border-line px-2 py-1.5 text-xs" /></div>
                       <div className="grid grid-cols-2 gap-2"><select name="campaignType" defaultValue={campaign.campaign_type} className="rounded-[6px] border border-line bg-white px-2 py-1.5 text-xs"><option value="direct">Trực tiếp</option><option value="partner">Kết nối</option></select><select name="category" defaultValue={campaign.category ?? CAMPAIGN_CATEGORIES[0]} className="rounded-[6px] border border-line bg-white px-2 py-1.5 text-xs">{CAMPAIGN_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></div>
+                      <select name="province" defaultValue={campaign.province ?? PROVINCES[0]} className="rounded-[6px] border border-line bg-white px-2 py-1.5 text-xs">{PROVINCES.map((province) => <option key={province} value={province}>{province}</option>)}</select>
                       <textarea name="description" defaultValue={campaign.description} maxLength={5000} rows={3} className="rounded-[6px] border border-line px-2 py-1.5 text-xs" placeholder="Mô tả chiến dịch" />
                       <button type="submit" disabled={busy !== null} className="rounded-[6px] bg-sky px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{busy === `edit-${campaign.id}` ? "Đang lưu…" : "Lưu chỉnh sửa"}</button>
                     </form>

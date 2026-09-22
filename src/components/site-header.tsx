@@ -49,11 +49,6 @@ export async function SiteHeader() {
               {label}
             </Link>
           ))}
-          {roleLinks.map(([label, href]) => (
-            <Link key={href} href={href} className="font-bold text-son transition hover:text-son/80">
-              {label}
-            </Link>
-          ))}
         </div>
         <div className="flex shrink-0 items-center gap-2.5">
           <Suspense fallback={<div className="h-[38px] w-[92px]" />}>
@@ -62,6 +57,7 @@ export async function SiteHeader() {
               email={user?.email ?? undefined}
               username={username}
               roleLabel={roleLabel}
+              roleLinks={roleLinks}
             />
           </Suspense>
           {canCreateCampaign ? <CreateCampaignModal /> : null}

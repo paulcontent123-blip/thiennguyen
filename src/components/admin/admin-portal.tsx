@@ -18,6 +18,7 @@ import {
   requestOrganizationRevision,
 } from "@/app/admin/actions";
 import { createClient } from "@/lib/supabase/client";
+import { PROVINCES } from "@/lib/geo/provinces";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
 type Related<T> = T | T[] | null;
@@ -26,6 +27,8 @@ type Campaign = {
   id: string;
   title: string;
   campaign_type: "direct" | "partner" | string;
+  category: string | null;
+  province: string | null;
   target_amount: number | string;
   status: string;
   review_note: string | null;
@@ -236,6 +239,7 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>("overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
+  const [campaignProvinceFilter, setCampaignProvinceFilter] = useState<string>("");
   const [auditFilter, setAuditFilter] = useState<AuditFilter>("pending");
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
@@ -264,10 +268,12 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
   const totalDisbursement = disbursements.reduce((total, item) => total + (Number(item.amount) || 0), 0);
 
   const filteredCampaigns = useMemo(() => {
-    if (campaignFilter === "all") return campaigns;
-    if (campaignFilter === "approved") return campaigns.filter((campaign) => ["approved", "active", "closed"].includes(campaign.status));
-    return campaigns.filter((campaign) => campaign.status === campaignFilter);
-  }, [campaignFilter, campaigns]);
+    let result = campaigns;
+    if (campaignFilter === "approved") result = result.filter((campaign) => ["approved", "active", "closed"].includes(campaign.status));
+    else if (campaignFilter !== "all") result = result.filter((campaign) => campaign.status === campaignFilter);
+    if (campaignProvinceFilter) result = result.filter((campaign) => campaign.province === campaignProvinceFilter);
+    return result;
+  }, [campaignFilter, campaignProvinceFilter, campaigns]);
 
   const pendingDisbursements = disbursements.filter((item) => item.status === "representative_approved" && item.post_audit_status === "not_reviewed");
   const auditedDisbursements = disbursements.filter((item) => item.post_audit_status !== "not_reviewed").slice(0, 8);
@@ -327,8 +333,8 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
         </section> : null}
 
         {panel === "campaigns" ? <section>
-          <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h1 className="font-serif text-[21px] font-medium text-chamDeep">Duyệt chiến dịch</h1><div className="flex flex-wrap gap-1.5">{[["all", `Tất cả (${campaigns.length})`], ["pending_review", `Chờ (${campaigns.filter((c) => c.status === "pending_review").length})`], ["needs_revision", `Cần bổ sung (${campaigns.filter((c) => c.status === "needs_revision").length})`], ["approved", `Đã duyệt (${campaigns.filter((c) => ["approved", "active", "closed"].includes(c.status)).length})`]].map(([value, label]) => <button key={value} type="button" onClick={() => setCampaignFilter(value as CampaignFilter)} className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${campaignFilter === value ? "border-son text-son" : "border-lineStrong text-inkMid hover:border-son hover:text-son"}`}>{label}</button>)}</div></div>
-          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[900px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Tổ chức</th><th className="px-3 py-2.5">Loại</th><th className="px-3 py-2.5">Mục tiêu</th><th className="px-3 py-2.5">Ngày gửi</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{filteredCampaigns.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-inkSoft">Không có chiến dịch nào.</td></tr> : filteredCampaigns.map((campaign) => <tr key={campaign.id} className="border-t border-line align-top"><td className="px-3 py-3"><div className="font-semibold text-chamDeep">{campaign.title}</div>{campaign.review_note ? <div className="mt-1 text-xs text-son">Lý do: {campaign.review_note}</div> : null}<CampaignHistory campaign={campaign} /></td><td className="px-3 py-3 text-inkMid">{firstRelated(campaign.organizations)?.name ?? "—"}</td><td className="px-3 py-3 text-inkMid">{campaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối"}</td><td className="px-3 py-3 font-mono font-bold text-son">{amount(campaign.target_amount)}</td><td className="px-3 py-3 text-xs text-inkSoft">{fmtDate(campaign.submitted_at ?? campaign.created_at)}</td><td className="px-3 py-3"><Pill status={campaign.status} /></td><td className="px-3 py-3">{campaign.status === "pending_review" ? <ReviewActions approveAction={approveCampaign.bind(null, campaign.id)} reviseAction={requestCampaignRevision.bind(null, campaign.id)} rejectAction={rejectCampaign.bind(null, campaign.id)} /> : campaign.status === "approved" ? <form><button formAction={activateCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Kích hoạt</button></form> : campaign.status === "active" ? <form><button formAction={closeCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-chamDeep px-3 py-1.5 text-xs font-bold text-white">Đóng chiến dịch</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h1 className="font-serif text-[21px] font-medium text-chamDeep">Duyệt chiến dịch</h1><div className="flex flex-wrap items-center gap-1.5">{[["all", `Tất cả (${campaigns.length})`], ["pending_review", `Chờ (${campaigns.filter((c) => c.status === "pending_review").length})`], ["needs_revision", `Cần bổ sung (${campaigns.filter((c) => c.status === "needs_revision").length})`], ["approved", `Đã duyệt (${campaigns.filter((c) => ["approved", "active", "closed"].includes(c.status)).length})`]].map(([value, label]) => <button key={value} type="button" onClick={() => setCampaignFilter(value as CampaignFilter)} className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${campaignFilter === value ? "border-son text-son" : "border-lineStrong text-inkMid hover:border-son hover:text-son"}`}>{label}</button>)}<select value={campaignProvinceFilter} onChange={(e) => setCampaignProvinceFilter(e.target.value)} className="h-[30px] rounded-full border border-lineStrong bg-white px-3 text-xs font-bold text-inkMid outline-none focus:border-son"><option value="">Tất cả tỉnh/thành</option>{PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}</select></div></div>
+          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[900px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Tổ chức</th><th className="px-3 py-2.5">Loại</th><th className="px-3 py-2.5">Mục tiêu</th><th className="px-3 py-2.5">Ngày gửi</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{filteredCampaigns.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-inkSoft">Không có chiến dịch nào.</td></tr> : filteredCampaigns.map((campaign) => <tr key={campaign.id} className="border-t border-line align-top"><td className="px-3 py-3"><div className="font-semibold text-chamDeep">{campaign.title}</div>{campaign.review_note ? <div className="mt-1 text-xs text-son">Lý do: {campaign.review_note}</div> : null}<CampaignHistory campaign={campaign} /></td><td className="px-3 py-3 text-inkMid">{firstRelated(campaign.organizations)?.name ?? "—"}{campaign.province ? <div className="text-xs text-sky">📍 {campaign.province}</div> : null}</td><td className="px-3 py-3 text-inkMid">{campaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối"}</td><td className="px-3 py-3 font-mono font-bold text-son">{amount(campaign.target_amount)}</td><td className="px-3 py-3 text-xs text-inkSoft">{fmtDate(campaign.submitted_at ?? campaign.created_at)}</td><td className="px-3 py-3"><Pill status={campaign.status} /></td><td className="px-3 py-3">{campaign.status === "pending_review" ? <ReviewActions approveAction={approveCampaign.bind(null, campaign.id)} reviseAction={requestCampaignRevision.bind(null, campaign.id)} rejectAction={rejectCampaign.bind(null, campaign.id)} /> : campaign.status === "approved" ? <form><button formAction={activateCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Kích hoạt</button></form> : campaign.status === "active" ? <form><button formAction={closeCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-chamDeep px-3 py-1.5 text-xs font-bold text-white">Đóng chiến dịch</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
         </section> : null}
 
         {panel === "kyc" ? <section>

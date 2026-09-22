@@ -66,6 +66,14 @@ npm run seed:demo
 
 Script có thể chạy lại nhiều lần: tài khoản đã tồn tại sẽ được cập nhật thay vì tạo trùng. Không bật hoặc chạy script này trên production.
 
+Sau khi có tài khoản demo, có thể seed thêm 8 chiến dịch demo (trạng thái `active`, trải đều 8 tỉnh/thành, đủ hạng mục và loại chiến dịch) để có dữ liệu thật cho tìm kiếm/lọc:
+
+```bash
+npm run seed:demo-campaigns
+```
+
+Cũng cần `DEMO_SEED_ENABLED=true` và chạy sau `npm run seed:demo` (script tạo chiến dịch dưới tên "Tổ chức Demo"). Idempotent — chạy lại chỉ cập nhật theo `slug`, không tạo trùng.
+
 ### Cloudinary cho hồ sơ tổ chức
 
 Cổng tổ chức upload ảnh đại diện và giấy phép qua signed Upload API ở phía server. Tạo một Cloudinary product environment rồi thêm vào `.env.local`:

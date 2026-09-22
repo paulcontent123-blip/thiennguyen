@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { CampaignCard, type CampaignCardData } from "@/components/campaign-card";
 import { SiteHeader } from "@/components/site-header";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
+import { PROVINCES } from "@/lib/geo/provinces";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -15,6 +16,7 @@ type PublicCampaign = CampaignCardData & {
   id: string;
   campaignType: string;
   category: string | null;
+  province: string | null;
   status: string;
   publishedAt: string | null;
 };
@@ -32,10 +34,12 @@ function buildPageHref(searchParams: SearchParams, page: number) {
   const params = new URLSearchParams();
   const query = firstParam(searchParams.q)?.trim();
   const category = firstParam(searchParams.category);
+  const province = firstParam(searchParams.province);
   const type = firstParam(searchParams.type);
 
   if (query) params.set("q", query);
   if (category) params.set("category", category);
+  if (province) params.set("province", province);
   if (type) params.set("type", type);
   if (page > 1) params.set("page", String(page));
 
@@ -51,13 +55,14 @@ async function getPublicCampaigns(searchParams: SearchParams, page: number) {
   const supabase = createClient();
   const query = firstParam(searchParams.q)?.replace(/[%,]/g, "").trim().slice(0, 80);
   const category = firstParam(searchParams.category);
+  const province = firstParam(searchParams.province);
   const type = firstParam(searchParams.type);
   const from = (page - 1) * PAGE_SIZE;
 
   let campaignsQuery = supabase
     .from("campaigns")
     .select(
-      "id, organization_id, slug, title, summary, target_amount, campaign_type, category, status, published_at, created_at",
+      "id, organization_id, slug, title, summary, target_amount, campaign_type, category, province, status, published_at, created_at",
       { count: "exact" },
     )
     .in("status", [...PUBLIC_STATUSES])
@@ -68,6 +73,9 @@ async function getPublicCampaigns(searchParams: SearchParams, page: number) {
   if (query) campaignsQuery = campaignsQuery.ilike("title", `%${query}%`);
   if (category && CAMPAIGN_CATEGORIES.includes(category as (typeof CAMPAIGN_CATEGORIES)[number])) {
     campaignsQuery = campaignsQuery.eq("category", category);
+  }
+  if (province && PROVINCES.includes(province as (typeof PROVINCES)[number])) {
+    campaignsQuery = campaignsQuery.eq("province", province);
   }
   if (type === "direct" || type === "partner") {
     campaignsQuery = campaignsQuery.eq("campaign_type", type);
@@ -94,6 +102,7 @@ async function getPublicCampaigns(searchParams: SearchParams, page: number) {
     organizationName: organizationNames.get(campaign.organization_id) ?? "Tổ chức thiện nguyện",
     campaignType: campaign.campaign_type,
     category: campaign.category,
+    province: campaign.province,
     status: campaign.status,
     publishedAt: campaign.published_at,
   }));
@@ -112,6 +121,7 @@ export default async function CampaignsPage({ searchParams = {} }: { searchParam
 
   const query = firstParam(searchParams.q) ?? "";
   const selectedCategory = firstParam(searchParams.category) ?? "";
+  const selectedProvince = firstParam(searchParams.province) ?? "";
   const selectedType = firstParam(searchParams.type) ?? "";
 
   return (
@@ -129,7 +139,7 @@ export default async function CampaignsPage({ searchParams = {} }: { searchParam
           <span className="rounded-full bg-luaSoft px-3 py-1.5 text-sm font-bold text-lua">{total} chiến dịch</span>
         </div>
 
-        <form className="mt-8 grid gap-3 rounded-[14px] border border-line bg-white p-4 md:grid-cols-[minmax(0,1fr)_180px_170px_auto]">
+        <form className="mt-8 grid gap-3 rounded-[14px] border border-line bg-white p-4 md:grid-cols-[minmax(0,1fr)_170px_170px_150px_auto]">
           <label className="sr-only" htmlFor="campaign-search">Tìm kiếm chiến dịch</label>
           <input
             id="campaign-search"
@@ -147,6 +157,16 @@ export default async function CampaignsPage({ searchParams = {} }: { searchParam
           >
             <option value="">Tất cả hạng mục</option>
             {CAMPAIGN_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}
+          </select>
+          <label className="sr-only" htmlFor="campaign-province">Tỉnh/thành</label>
+          <select
+            id="campaign-province"
+            name="province"
+            defaultValue={selectedProvince}
+            className="h-11 rounded-[8px] border border-lineStrong bg-paper px-3 text-sm text-chamDeep outline-none focus:border-son"
+          >
+            <option value="">Tất cả tỉnh/thành</option>
+            {PROVINCES.map((province) => <option key={province} value={province}>{province}</option>)}
           </select>
           <label className="sr-only" htmlFor="campaign-type">Loại chiến dịch</label>
           <select

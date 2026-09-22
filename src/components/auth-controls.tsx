@@ -15,9 +15,10 @@ type AuthControlsProps = {
   email?: string;
   username?: string;
   roleLabel?: string;
+  roleLinks?: readonly (readonly string[])[];
 };
 
-export function AuthControls({ isAuthenticated = false, email, username = "Tài khoản", roleLabel }: AuthControlsProps) {
+export function AuthControls({ isAuthenticated = false, email, username = "Tài khoản", roleLabel, roleLinks = [] }: AuthControlsProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -219,6 +220,22 @@ export function AuthControls({ isAuthenticated = false, email, username = "Tài 
             >
               <span aria-hidden>👤</span> Tài khoản
             </Link>
+            {roleLinks.length > 0 ? (
+              <div role="none" className="border-t border-line py-1.5">
+                {roleLinks.map(([label, href]) => (
+                  <Link
+                    key={href}
+                    href={href}
+                    role="menuitem"
+                    onClick={() => setAccountMenuOpen(false)}
+                    className="flex items-center gap-2.5 px-4 py-2.5 text-sm font-semibold text-son transition hover:bg-son/5"
+                  >
+                    <span aria-hidden>⚙</span> {label}
+                  </Link>
+                ))}
+              </div>
+            ) : null}
+            <div role="none" className="border-t border-line py-1.5">
             <button
               type="button"
               role="menuitem"
@@ -228,6 +245,7 @@ export function AuthControls({ isAuthenticated = false, email, username = "Tài 
             >
               <span aria-hidden>↪</span> {loading ? "Đang đăng xuất…" : "Đăng xuất"}
             </button>
+            </div>
           </div>
         ) : null}
       </div>

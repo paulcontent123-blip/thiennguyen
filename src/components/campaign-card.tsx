@@ -11,6 +11,7 @@ export type CampaignCardData = {
   organizationName?: string;
   campaignType?: string;
   category?: string | null;
+  province?: string | null;
   status?: string;
 };
 
@@ -32,6 +33,7 @@ export function CampaignCard({ campaign }: { campaign: CampaignCardData }) {
       <div className="flex flex-wrap items-center gap-2 text-xs font-bold">
         {campaign.status ? <span className="rounded-full bg-luaSoft px-2 py-1 text-lua">{statusLabels[campaign.status] ?? campaign.status}</span> : null}
         {campaign.category ? <span className="rounded-full bg-paperDeep px-2 py-1 text-inkMid">{campaign.category}</span> : null}
+        {campaign.province ? <span className="rounded-full bg-skySoft px-2 py-1 text-sky">📍 {campaign.province}</span> : null}
       </div>
       <h3 className="font-serif text-lg font-semibold leading-snug text-chamDeep group-hover:text-son">{campaign.title}</h3>
       <p className="line-clamp-3 text-[13px] leading-5 text-inkMid">{campaign.summary || "Chiến dịch thiện nguyện đang cần sự đồng hành của cộng đồng."}</p>

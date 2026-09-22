@@ -4,7 +4,7 @@ import { requirePageRole } from "@/lib/auth/server";
 export default async function AdminPage() {
   const { supabase } = await requirePageRole(["admin"], "/admin");
 
-  const [campaignsRes, organizationsRes, disbursementsRes, rescueApplicationsRes, sosReportsRes] = await Promise.all([
+  const [campaignsRes, organizationsRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id, title, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
@@ -26,8 +26,16 @@ export default async function AdminPage() {
       )
       .order("created_at", { ascending: false }),
     supabase
+      .from("rescue_teams")
+      .select("id, name, resource_types, province, radius_km, status, activated_at, created_at")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("rescue_invitations")
+      .select("id, email, application_id, status, expires_at, accepted_at, created_at")
+      .order("created_at", { ascending: false }),
+    supabase
       .from("sos_reports")
-      .select("id, location_text, needs, contact_phone, status, created_at")
+      .select("id, location_text, description, needs, contact_phone, status, photo_url, created_at")
       .order("created_at", { ascending: false }),
   ]);
 
@@ -37,6 +45,8 @@ export default async function AdminPage() {
       organizations={organizationsRes.data ?? []}
       disbursements={disbursementsRes.data ?? []}
       rescueApplications={rescueApplicationsRes.data ?? []}
+      rescueTeams={rescueTeamsRes.data ?? []}
+      rescueInvitations={rescueInvitationsRes.data ?? []}
       sosReports={sosReportsRes.data ?? []}
     />
   );

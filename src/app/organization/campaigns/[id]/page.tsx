@@ -48,6 +48,16 @@ type Disbursement = {
   created_at: string;
 };
 
+type DonationTransaction = {
+  id: string;
+  tx_ref: string;
+  amount_vnd: number | string;
+  status: string;
+  expires_at: string;
+  completed_at: string | null;
+  created_at: string;
+};
+
 const campaignStatus: Record<string, { label: string; className: string }> = {
   draft: { label: "Bản nháp", className: "bg-inkSoft/15 text-inkSoft" },
   pending_review: { label: "Chờ duyệt", className: "bg-nghe/15 text-ngheDeep" },
@@ -71,6 +81,15 @@ const auditStatus: Record<string, string> = {
   valid: "Hợp lệ",
   needs_explanation: "Cần giải trình",
   violation: "Có dấu hiệu vi phạm",
+};
+
+const transactionStatus: Record<string, { label: string; className: string }> = {
+  pending: { label: "Chờ xác nhận", className: "bg-nghe/15 text-ngheDeep" },
+  completed: { label: "Thành công", className: "bg-lua/15 text-lua" },
+  needs_review: { label: "Cần đối soát", className: "bg-sky/15 text-sky" },
+  failed: { label: "Thất bại", className: "bg-son/15 text-son" },
+  expired: { label: "Hết hạn", className: "bg-inkSoft/15 text-inkSoft" },
+  refunded: { label: "Đã hoàn tiền", className: "bg-paperDeep text-inkMid" },
 };
 
 const currency = new Intl.NumberFormat("vi-VN");
@@ -126,6 +145,7 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
     { data: paymentConfig, error: paymentError },
     { data: seo, error: seoError },
     { data: shareSettings, error: shareError },
+    { data: transactions, error: transactionError },
   ] = await Promise.all([
     supabase
       .from("campaign_status_history")
@@ -163,6 +183,12 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
       .select("campaign_id, zalo_enabled, facebook_enabled, copy_enabled, share_title, share_description, share_image_url, is_public, created_at, updated_at")
       .eq("campaign_id", campaign.id)
       .maybeSingle(),
+    supabase
+      .from("transactions")
+      .select("id, tx_ref, amount_vnd, status, expires_at, completed_at, created_at")
+      .eq("campaign_id", campaign.id)
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
 
   if (historyError) throw new Error(historyError.message);
@@ -172,6 +198,7 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
   if (paymentError) throw new Error(paymentError.message);
   if (seoError) throw new Error(seoError.message);
   if (shareError) throw new Error(shareError.message);
+  if (transactionError) console.warn("Organization transaction list is unavailable", { campaignId: campaign.id, code: transactionError.code });
 
   const typedCampaign = campaign as Campaign;
   const typedHistory = (history ?? []) as CampaignHistory[];
@@ -181,7 +208,12 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
   const typedPaymentConfig = (paymentConfig ?? null) as CampaignPaymentConfig | null;
   const typedSeo = (seo ?? null) as CampaignSeo | null;
   const typedShareSettings = (shareSettings ?? null) as CampaignShareSettings | null;
+  const typedTransactions = (transactions ?? []) as DonationTransaction[];
   const totalDisbursement = typedDisbursements.reduce((total, item) => total + Number(item.amount || 0), 0);
+  const totalReceived = typedTransactions
+    .filter((item) => item.status === "completed")
+    .reduce((total, item) => total + Number(item.amount_vnd || 0), 0);
+  const pendingTransactions = typedTransactions.filter((item) => item.status === "pending").length;
 
   return (
     <main className="min-h-screen bg-paper">
@@ -207,8 +239,10 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
           ) : null}
         </div>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <InfoCard label="Mục tiêu" value={`${currency.format(Number(typedCampaign.target_amount) || 0)}đ`} />
+          <InfoCard label="Đã xác nhận" value={`${currency.format(totalReceived)}đ`} />
+          <InfoCard label="Giao dịch chờ" value={String(pendingTransactions)} />
           <InfoCard label="Loại chiến dịch" value={typedCampaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối"} />
           <InfoCard label="Thời hạn" value={typedCampaign.deadline ? formatDate(typedCampaign.deadline) : "Không giới hạn"} />
           <InfoCard label="Tổng hồ sơ giải ngân" value={`${currency.format(totalDisbursement)}đ`} />
@@ -245,6 +279,28 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
                     </li>
                   ))}
                 </ol>
+              )}
+            </section>
+
+            <section className="rounded-[12px] border border-line bg-white p-6">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="font-serif text-xl font-semibold text-chamDeep">Giao dịch ủng hộ</h2>
+                <span className="text-xs text-inkSoft">{typedTransactions.length} giao dịch gần nhất</span>
+              </div>
+              {typedTransactions.length === 0 ? (
+                <p className="mt-5 text-sm text-inkSoft">Chưa có giao dịch nào được tạo cho chiến dịch này.</p>
+              ) : (
+                <div className="mt-5 overflow-x-auto">
+                  <table className="w-full min-w-[620px] border-collapse text-left text-sm">
+                    <thead><tr className="border-b border-line text-xs uppercase tracking-wide text-inkSoft"><th className="px-2 py-2">Mã</th><th className="px-2 py-2 text-right">Số tiền</th><th className="px-2 py-2">Trạng thái</th><th className="px-2 py-2">Thời gian</th></tr></thead>
+                    <tbody>
+                      {typedTransactions.map((item) => {
+                        const status = transactionStatus[item.status] ?? { label: item.status, className: "bg-paperDeep text-inkMid" };
+                        return <tr key={item.id} className="border-b border-line/70 last:border-0"><td className="px-2 py-3 font-mono text-xs font-bold text-chamDeep">{item.tx_ref}</td><td className="px-2 py-3 text-right font-mono font-bold text-son">{currency.format(Number(item.amount_vnd) || 0)}đ</td><td className="px-2 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${status.className}`}>{status.label}</span></td><td className="px-2 py-3 text-xs text-inkSoft">{formatDateTime(item.completed_at ?? item.created_at)}</td></tr>;
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </section>
 

@@ -23,6 +23,16 @@ type DonationReceiptEmailInput = {
   filename?: string;
 };
 
+type RescueInvitationEmailInput = {
+  to: string;
+  recipientName: string;
+  teamName: string;
+  province: string;
+  actionLink: string;
+  invitationId: string;
+  expiresAt: string;
+};
+
 function escapeHtml(value: string) {
   return value.replace(/[&<>'"]/g, (character) => ({
     "&": "&amp;",
@@ -64,5 +74,28 @@ export function sendDonationReceiptEmail(input: DonationReceiptEmailInput): Prom
     html: `<p>Xin chào ${donorName},</p><p>Cảm ơn bạn đã ủng hộ chiến dịch <strong>${campaignTitle}</strong> với số tiền <strong>${amount}đ</strong>.</p><p>Biên nhận PDF được đính kèm email này.</p>`,
     attachments: [{ filename, content: input.pdf, contentType: "application/pdf" }],
     idempotencyKey: `donation-receipt:${input.donationId}`,
+  });
+}
+
+export function sendRescueInvitationEmail(input: RescueInvitationEmailInput): Promise<EmailSendResult> {
+  const recipientName = escapeHtml(input.recipientName);
+  const teamName = escapeHtml(input.teamName);
+  const province = escapeHtml(input.province);
+  const actionLink = escapeHtml(input.actionLink);
+  const expiresAt = escapeHtml(input.expiresAt);
+
+  return getEmailProvider().send({
+    to: input.to,
+    subject: `Lời mời tham gia đội cứu trợ Thiện Nguyện — ${input.teamName}`,
+    text: [
+      `Xin chào ${input.recipientName},`,
+      `Admin đã tạo tài khoản đội cứu trợ "${input.teamName}" cho khu vực ${input.province}.`,
+      "Bấm vào liên kết dưới đây để xác nhận lời mời và tự đặt mật khẩu:",
+      input.actionLink,
+      `Liên kết có hiệu lực đến ${input.expiresAt}.`,
+      "Nếu bạn không mong đợi email này, hãy bỏ qua và liên hệ Admin Thiện Nguyện.",
+    ].join("\n\n"),
+    html: `<p>Xin chào <strong>${recipientName}</strong>,</p><p>Admin đã tạo tài khoản đội cứu trợ <strong>${teamName}</strong> cho khu vực <strong>${province}</strong>.</p><p><a href="${actionLink}">Xác nhận lời mời và đặt mật khẩu</a></p><p>Liên kết có hiệu lực đến ${expiresAt}.</p><p>Nếu bạn không mong đợi email này, hãy bỏ qua và liên hệ Admin Thiện Nguyện.</p>`,
+    idempotencyKey: `rescue-invitation:${input.invitationId}`,
   });
 }

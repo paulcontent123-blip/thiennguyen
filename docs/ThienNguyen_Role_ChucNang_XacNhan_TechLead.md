@@ -12,7 +12,7 @@
 4. Không có quy trình “duyệt lớp 2” và Admin không đóng vai Checker.
 5. eKYC tổ chức được đơn giản hóa thành upload giấy phép hoạt động để Admin kiểm tra.
 6. Cứu trợ là luồng riêng do Admin quản lý. Hồ sơ cứu trợ có thể được gửi từ giao diện riêng nhưng không tự kích hoạt tài khoản/quyền.
-7. `rescue_team` được giữ như role kỹ thuật nội bộ để cấp cho hồ sơ đã được Admin duyệt; không xuất hiện trong đăng ký tài khoản công khai.
+7. `rescue_team` được giữ như role kỹ thuật nội bộ để Admin cấp qua hồ sơ đã duyệt hoặc lời mời trực tiếp qua email; không xuất hiện trong đăng ký tài khoản công khai.
 
 ---
 
@@ -47,7 +47,7 @@ Trong MVP, `organizations.user_id` đại diện cho tài khoản người đạ
 |---|---|
 | Gửi hồ sơ | Cá nhân/đội gửi hồ sơ qua luồng riêng; hồ sơ có trạng thái `pending_review` |
 | Duyệt | Chỉ Admin xem, duyệt hoặc từ chối hồ sơ |
-| Cấp tài khoản | Chỉ hồ sơ `approved` mới được cấp/kích hoạt role `rescue_team` |
+| Cấp tài khoản | Hồ sơ `approved` có thể được kích hoạt; Admin cũng có thể tạo trực tiếp tài khoản và gửi lời mời qua email |
 | Vận hành | Nhận nhiệm vụ SOS do Admin điều phối; cập nhật `available/en-route/busy` khi được cấp quyền |
 | Không được | Tự kích hoạt tài khoản; tự xem toàn bộ SOS; tự duyệt hồ sơ cứu trợ khác |
 
@@ -118,7 +118,7 @@ disbursements
 submitted → pending_review → approved | needs_revision | rejected
 ```
 
-Khuyến nghị tách `rescue_applications` khỏi `rescue_teams`. Chỉ sau khi application được duyệt mới tạo/kích hoạt tài khoản `rescue_team`.
+Khuyến nghị tách `rescue_applications` khỏi `rescue_teams`. Nhánh hồ sơ chỉ tạo/kích hoạt tài khoản sau khi được duyệt; nhánh Admin mời trực tiếp tạo Auth user và `rescue_teams` bằng Service Role ở server.
 
 ---
 
@@ -153,7 +153,7 @@ Người đại diện upload chứng từ
 Gửi hồ sơ cứu trợ qua form riêng
 → pending_review
 → chỉ Admin nhìn thấy và xử lý
-→ approved: cấp/kích hoạt tài khoản rescue_team
+→ approved: cấp/kích hoạt tài khoản rescue_team (hoặc Admin mời trực tiếp qua email)
 → rejected/needs_revision: thông báo kết quả
 ```
 
@@ -165,7 +165,7 @@ Form công khai không được hiển thị “Vào đội điều phối” ho
 
 1. Chữ ký/approval của người đại diện dùng OTP, chữ ký điện tử, checkbox cam kết hay file ký số?
 2. Hậu kiểm diễn ra trước hay sau khi giải ngân xuất hiện trên Cashflow công khai?
-3. Tài khoản `rescue_team` do Admin tạo mới hay kích hoạt từ email/SĐT trong hồ sơ đã duyệt?
+3. ✅ Tài khoản `rescue_team` có thể do Admin tạo mới qua email hoặc kích hoạt từ hồ sơ đã duyệt; cả hai nhánh đều không public signup.
 4. Một SOS được giao độc quyền cho một đội hay cho phép nhiều đội phối hợp?
 5. Doanh nghiệp đồng hành có cần tài khoản/role riêng ở Phase 1 hay tiếp tục qua form liên hệ?
 6. Một người có được đại diện cho nhiều tổ chức và cơ chế chuyển người đại diện là gì?

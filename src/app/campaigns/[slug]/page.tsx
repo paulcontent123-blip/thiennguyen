@@ -3,8 +3,9 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { CampaignDetailTabs, CampaignShare } from "@/components/campaigns/campaign-detail-tabs";
+import { DonationDialog } from "@/components/campaigns/donation-dialog";
 import { SiteHeader } from "@/components/site-header";
-import { buildVietQrUrl, type CampaignMedia, type CampaignPaymentConfig, type CampaignSeo, type CampaignShareSettings, type CampaignUpdate } from "@/lib/campaigns/content";
+import { type CampaignMedia, type CampaignPaymentConfig, type CampaignSeo, type CampaignShareSettings, type CampaignUpdate } from "@/lib/campaigns/content";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -97,12 +98,31 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   if (seoError) throw new Error(seoError.message);
   if (shareError) throw new Error(shareError.message);
 
+  const [authResult, summaryResult] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.rpc("get_campaign_donation_summary", { p_campaign_id: campaign.id }),
+  ]);
+
+  if (summaryResult.error) {
+    console.warn("Campaign donation summary is unavailable", {
+      campaignId: campaign.id,
+      code: summaryResult.error.code,
+    });
+  }
+
   const status = statusLabels[campaign.status] ?? { label: campaign.status, className: "bg-paperDeep text-inkMid" };
   const campaignType = campaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối";
   const remainingDays = daysRemaining(campaign.deadline);
   const targetAmount = Number(campaign.target_amount) || 0;
-  const executionAmount = targetAmount * 0.9;
-  const operationAmount = targetAmount * 0.1;
+  const summaryRow = (Array.isArray(summaryResult.data) ? summaryResult.data[0] : summaryResult.data) as {
+    total_amount_vnd?: number | string;
+    completed_count?: number | string;
+  } | null;
+  const receivedAmount = Number(summaryRow?.total_amount_vnd ?? 0) || 0;
+  const completedCount = Number(summaryRow?.completed_count ?? 0) || 0;
+  const executionAmount = receivedAmount * 0.9;
+  const operationAmount = receivedAmount * 0.1;
+  const progressPercent = targetAmount > 0 ? Math.min(100, Math.round((receivedAmount / targetAmount) * 100)) : 0;
   const typedMedia = (media ?? []) as CampaignMedia[];
   const typedUpdates = (updates ?? []) as CampaignUpdate[];
   const typedPaymentConfig = (paymentConfig ?? null) as CampaignPaymentConfig | null;
@@ -111,9 +131,9 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   const cover = typedMedia.find((item) => item.media_type === "cover") ?? null;
   const poster = typedMedia.find((item) => item.media_type === "poster") ?? null;
   const videos = typedMedia.filter((item) => item.media_type === "video");
-  const qrUrl = typedPaymentConfig?.is_active
-    ? buildVietQrUrl(typedPaymentConfig, { amount: targetAmount, campaignSlug: campaign.slug, campaignId: campaign.id })
-    : null;
+  // A payment QR must contain a unique tx_ref. It is generated only after the
+  // donor creates an intent in DonationDialog, never as a reusable static QR.
+  const qrUrl = null;
   const schemaJson = typedSeo?.schema_json
     ? JSON.stringify(typedSeo.schema_json).replace(/</g, "\\u003c")
     : null;
@@ -179,6 +199,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
 
             <CashflowTree
               targetAmount={targetAmount}
+              receivedAmount={receivedAmount}
               campaignType={campaign.campaign_type}
               executionAmount={executionAmount}
               operationAmount={operationAmount}
@@ -207,13 +228,13 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
           <aside className="lg:sticky lg:top-[76px]">
             <section className="rounded-[14px] border-[1.5px] border-lineStrong bg-white p-5 shadow-card">
               <div className="flex items-baseline justify-between gap-2">
-                <span className="font-mono text-[21px] font-bold text-son">{currency.format(targetAmount)}₫</span>
-                <span className="text-[13px] text-inkSoft">mục tiêu</span>
+                <span className="font-mono text-[21px] font-bold text-son">{currency.format(receivedAmount)}₫</span>
+                <span className="text-[13px] text-inkSoft">đã tiếp nhận</span>
               </div>
               <div className="my-2 h-1.5 overflow-hidden rounded-full bg-paperDeep">
-                <div className="h-full w-0 rounded-full bg-son" />
+                <div className="h-full rounded-full bg-son transition-all" style={{ width: `${progressPercent}%` }} />
               </div>
-              <div className="mb-4 text-xs font-bold text-son">Chưa có dữ liệu giao dịch công khai</div>
+              <div className="mb-4 text-xs font-bold text-son">{completedCount > 0 ? `${completedCount} lượt ủng hộ đã xác nhận · ${progressPercent}% mục tiêu` : "Chưa có giao dịch được ngân hàng xác nhận"}</div>
 
               <div className="mb-4 grid grid-cols-2 gap-2">
                 <SidebarStat value={currency.format(targetAmount) + "₫"} label="mục tiêu" />
@@ -222,11 +243,18 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
                 <SidebarStat value={status.label} label="trạng thái" />
               </div>
 
-              <button type="button" disabled className="mb-2 w-full cursor-not-allowed rounded-[40px] bg-inkSoft/20 px-4 py-3 text-sm font-bold text-inkSoft">
-                ♥ Ủng hộ ngay · Sắp mở
-              </button>
+              <DonationDialog
+                campaignId={campaign.id}
+                campaignSlug={campaign.slug}
+                campaignTitle={campaign.title}
+                campaignType={campaign.campaign_type}
+                canDonate={campaign.status === "active" && Boolean(typedPaymentConfig?.is_active)}
+                disabledReason={campaign.status === "closed" ? "Chiến dịch đã đóng" : campaign.status !== "active" ? "Chưa mở nhận ủng hộ" : "Chưa cấu hình VietQR"}
+                defaultEmail={authResult.data.user?.email ?? ""}
+                isAuthenticated={Boolean(authResult.data.user)}
+              />
               <CampaignShare title={campaign.title} compact settings={typedShareSettings} />
-              <div className="mt-3 text-[11.5px] leading-6 text-inkSoft">🔒 Luồng quyên góp sẽ được mở sau khi transaction và webhook ngân hàng hoàn tất.</div>
+              <div className="mt-3 text-[11.5px] leading-6 text-inkSoft">🔒 Mỗi lượt ủng hộ có mã giao dịch riêng. Chỉ webhook ngân hàng hợp lệ mới chuyển trạng thái từ chờ sang thành công.</div>
             </section>
           </aside>
         </div>
@@ -237,11 +265,13 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
 
 function CashflowTree({
   targetAmount,
+  receivedAmount,
   campaignType,
   executionAmount,
   operationAmount,
 }: {
   targetAmount: number;
+  receivedAmount: number;
   campaignType: string;
   executionAmount: number;
   operationAmount: number;
@@ -256,7 +286,7 @@ function CashflowTree({
         </div>
       </div>
 
-      <TreeNode icon="💰" label="Nguồn ủng hộ vào" amount={targetAmount} meta="Số tiền thực nhận sẽ được cập nhật từ webhook ngân hàng" tone="income">
+      <TreeNode icon="💰" label="Nguồn ủng hộ vào" amount={receivedAmount} meta="Chỉ cộng các giao dịch đã được webhook ngân hàng đối soát thành công" tone="income">
         {campaignType === "direct" ? (
           <>
             <TreeNode icon="📋" label="Ví thực thi (90%)" amount={executionAmount} meta="Chỉ giải ngân theo tiến độ và chứng từ xác thực" tone="exec">
@@ -265,7 +295,7 @@ function CashflowTree({
             <TreeNode icon="⚙" label="Ví vận hành (10%)" amount={operationAmount} meta="Logistics, xác thực và chi phí vận hành Quỹ" tone="ops" />
           </>
         ) : (
-          <TreeNode icon="🔗" label="Đối tác thụ hưởng" amount={targetAmount} meta="Thông tin chuyển tiếp sẽ hiển thị sau khi có giao dịch được xác nhận" tone="exec" />
+          <TreeNode icon="🔗" label="Đối tác thụ hưởng" amount={receivedAmount} meta="Tiền chuyển thẳng đến tài khoản đối tác và chỉ hiển thị sau khi giao dịch được xác nhận" tone="exec" />
         )}
       </TreeNode>
       <p className="mt-4 rounded-[8px] bg-paper px-3 py-2 text-xs leading-5 text-inkSoft">Dữ liệu Cashflow Tree sẽ tự động thay đổi khi hệ thống ghi nhận transaction và hồ sơ giải ngân hợp lệ.</p>

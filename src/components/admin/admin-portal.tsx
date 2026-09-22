@@ -9,6 +9,8 @@ import {
   closeCampaign,
   approveOrganization,
   approveRescueApplication,
+  deleteRescueInvitation,
+  deleteRescueTeam,
   markSosHandled,
   postAuditDisbursement,
   rejectCampaign,
@@ -17,6 +19,7 @@ import {
   requestCampaignRevision,
   requestOrganizationRevision,
 } from "@/app/admin/actions";
+import { RescueAccountForm } from "@/components/admin/rescue-account-form";
 import { createClient } from "@/lib/supabase/client";
 import { PROVINCES } from "@/lib/geo/provinces";
 
@@ -89,9 +92,102 @@ type RescueApplication = {
 type SosReport = {
   id: string;
   location_text: string;
+  description: string | null;
   needs: string[];
   contact_phone: string | null;
   status: string;
+  photo_url: string | null;
+  created_at: string;
+};
+
+type RescueTeam = {
+  id: string;
+  name: string;
+  resource_types: string[];
+  province: string | null;
+  radius_km: number | null;
+  status: string;
+  activated_at: string;
+  created_at: string;
+};
+
+function DeleteRescueTeamButton({ teamId, teamName, onDeleted }: { teamId: string; teamName: string; onDeleted: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!window.confirm(`Xóa vĩnh viễn đội “${teamName}” và tài khoản đăng nhập liên kết? Thao tác này không thể hoàn tác.`)) return;
+
+    setLoading(true);
+    setError(null);
+    const result = await deleteRescueTeam(teamId);
+    setLoading(false);
+
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
+    onDeleted();
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={loading}
+        className="rounded-[4px] bg-son/15 px-2.5 py-1.5 text-xs font-bold text-son transition hover:bg-son/25 disabled:cursor-wait disabled:opacity-60"
+      >
+        {loading ? "Đang xóa…" : "Xóa đội"}
+      </button>
+      {error ? <span className="max-w-[190px] text-right text-[11px] text-son">{error}</span> : null}
+    </div>
+  );
+}
+
+function DeleteRescueInvitationButton({ invitationId, email, onDeleted }: { invitationId: string; email: string; onDeleted: () => void }) {
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!window.confirm(`Xóa vĩnh viễn lời mời đã thu hồi của ${email}? Thao tác này không thể hoàn tác.`)) return;
+
+    setLoading(true);
+    setError(null);
+    const result = await deleteRescueInvitation(invitationId);
+    setLoading(false);
+
+    if (!result.ok) {
+      setError(result.message);
+      return;
+    }
+
+    onDeleted();
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={loading}
+        className="rounded-[4px] bg-son/15 px-2.5 py-1.5 text-xs font-bold text-son transition hover:bg-son/25 disabled:cursor-wait disabled:opacity-60"
+      >
+        {loading ? "Đang xóa…" : "Xóa lời mời"}
+      </button>
+      {error ? <span className="max-w-[190px] text-right text-[11px] text-son">{error}</span> : null}
+    </div>
+  );
+}
+
+type RescueInvitation = {
+  id: string;
+  email: string;
+  application_id: string | null;
+  status: string;
+  expires_at: string;
+  accepted_at: string | null;
   created_at: string;
 };
 
@@ -138,6 +234,13 @@ const statusPill: Record<string, { label: string; className: string }> = {
   urgent: { label: "Khẩn cấp", className: "bg-son/15 text-son" },
   needs_support: { label: "Cần hỗ trợ", className: "bg-nghe/15 text-ngheDeep" },
   handled: { label: "Đã xử lý", className: "bg-lua/15 text-lua" },
+  accepted: { label: "Đã kích hoạt", className: "bg-lua/15 text-lua" },
+  expired: { label: "Hết hạn", className: "bg-inkSoft/15 text-inkSoft" },
+  revoked: { label: "Đã thu hồi", className: "bg-son/15 text-son" },
+  available: { label: "Sẵn sàng", className: "bg-lua/15 text-lua" },
+  inactive: { label: "Chưa kích hoạt", className: "bg-inkSoft/15 text-inkSoft" },
+  en_route: { label: "Đang điều phối", className: "bg-sky/15 text-sky" },
+  busy: { label: "Đang bận", className: "bg-nghe/15 text-ngheDeep" },
 };
 
 function Pill({ status }: { status: string }) {
@@ -235,7 +338,7 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
   );
 }
 
-export function AdminPortal({ campaigns, organizations, disbursements, rescueApplications, sosReports }: { campaigns: Campaign[]; organizations: Organization[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; sosReports: SosReport[] }) {
+export function AdminPortal({ campaigns, organizations, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports }: { campaigns: Campaign[]; organizations: Organization[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[] }) {
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>("overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
@@ -348,9 +451,26 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
         </section> : null}
 
         {panel === "sos" ? <section>
+          <div className="mb-4 rounded-[8px] border border-line bg-white p-4">
+            <h2 className="font-serif text-lg font-semibold text-chamDeep">Thêm tài khoản đội cứu trợ</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-inkMid">
+              Luồng nội bộ dành riêng cho Admin. Hệ thống sẽ tạo tài khoản, gán role rescue_team, tạo hồ sơ đội ở trạng thái chờ kích hoạt và gửi email mời người nhận tự đặt mật khẩu.
+            </p>
+            <RescueAccountForm />
+          </div>
+          <div className="mb-4 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-[8px] border border-line bg-white p-4">
+              <h2 className="mb-3 text-sm font-bold text-chamDeep">Đội cứu trợ đã cấp quyền ({rescueTeams.length})</h2>
+              {rescueTeams.length === 0 ? <p className="text-sm text-inkSoft">Chưa có đội cứu trợ nào.</p> : <div className="space-y-2">{rescueTeams.map((team) => <div key={team.id} className="flex items-start justify-between gap-3 rounded-[6px] bg-paper px-3 py-2.5"><div className="min-w-0"><strong className="text-sm text-chamDeep">{team.name}</strong><div className="text-xs text-inkSoft">{team.province ?? "Chưa rõ địa bàn"} · bán kính {team.radius_km ?? "—"}km · {team.resource_types.join(" · ") || "Chưa khai báo"}</div></div><div className="flex shrink-0 items-start gap-2"><Pill status={team.status} />{team.status === "inactive" ? <DeleteRescueTeamButton teamId={team.id} teamName={team.name} onDeleted={() => router.refresh()} /> : null}</div></div>)}</div>}
+            </div>
+            <div className="rounded-[8px] border border-line bg-white p-4">
+              <h2 className="mb-3 text-sm font-bold text-chamDeep">Lời mời trực tiếp ({rescueInvitations.filter((invitation) => !invitation.application_id).length})</h2>
+              {rescueInvitations.filter((invitation) => !invitation.application_id).length === 0 ? <p className="text-sm text-inkSoft">Chưa có lời mời nào.</p> : <div className="space-y-2">{rescueInvitations.filter((invitation) => !invitation.application_id).map((invitation) => <div key={invitation.id} className="flex items-start justify-between gap-3 rounded-[6px] bg-paper px-3 py-2.5"><div><strong className="text-sm text-chamDeep">{invitation.email}</strong><div className="text-xs text-inkSoft">Tạo {fmtDate(invitation.created_at)} · hết hạn {fmtDate(invitation.expires_at)}{invitation.accepted_at ? ` · xác nhận ${fmtDate(invitation.accepted_at)}` : ""}</div></div><div className="flex shrink-0 items-start gap-2"><Pill status={invitation.status} />{invitation.status === "revoked" ? <DeleteRescueInvitationButton invitationId={invitation.id} email={invitation.email} onDeleted={() => router.refresh()} /> : null}</div></div>)}</div>}
+            </div>
+          </div>
           <h1 className="mb-5 font-serif text-[21px] font-medium text-chamDeep">Quản lý SOS Reports</h1>
           <div className="mb-4 rounded-[8px] border border-line bg-white p-4"><div className="mb-3 text-sm font-bold text-chamDeep">Hồ sơ hoạt động cứu trợ chờ duyệt ({pendingRescue})</div>{pendingRescue === 0 ? <p className="text-sm text-inkSoft">Không có hồ sơ nào đang chờ.</p> : <div className="space-y-3">{rescueApplications.filter((application) => application.status === "pending").map((application) => <div key={application.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-3 first:border-t-0 first:pt-0"><div className="min-w-[220px] flex-1"><strong className="text-chamDeep">{application.team_name || application.contact_name}</strong><div className="text-xs text-inkSoft">{application.resource_types.join(" · ") || "Chưa khai báo"} · {application.province ?? "Chưa rõ địa bàn"} · bán kính {application.radius_km ?? "—"}km</div><div className="mt-0.5 text-xs text-inkSoft">{application.contact_email}{application.contact_phone ? ` · ${application.contact_phone}` : ""}</div></div><form className="flex items-center gap-2"><button formAction={approveRescueApplication.bind(null, application.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Duyệt{application.submitted_by ? " & kích hoạt" : ""}</button><button formAction={rejectRescueApplication.bind(null, application.id)} className="rounded-[4px] bg-son/15 px-3 py-1.5 text-xs font-bold text-son">Từ chối</button></form></div>)}</div>}</div>
-          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><div className="border-b border-line px-4 py-3.5 text-sm font-bold text-chamDeep">Điểm SOS thực địa ({unhandledSos} chưa xử lý)</div><table className="w-full min-w-[750px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Vị trí</th><th className="px-3 py-2.5">Tình trạng</th><th className="px-3 py-2.5">Nhu cầu</th><th className="px-3 py-2.5">Liên hệ</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{sosReports.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-inkSoft">Chưa có báo cáo SOS nào.</td></tr> : sosReports.map((report) => <tr key={report.id} className="border-t border-line"><td className="px-3 py-2.5"><strong className="text-chamDeep">{report.location_text}</strong><div className="text-xs text-inkSoft">{fmtDate(report.created_at)}</div></td><td className="px-3 py-2.5"><Pill status={report.status} /></td><td className="px-3 py-2.5 text-inkMid">{report.needs.join(", ") || "—"}</td><td className="px-3 py-2.5 text-xs text-inkMid">{report.contact_phone ?? "—"}</td><td className="px-3 py-2.5">{report.status !== "handled" ? <form><button formAction={markSosHandled.bind(null, report.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Đánh dấu đã xử lý</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><div className="border-b border-line px-4 py-3.5 text-sm font-bold text-chamDeep">Điểm SOS thực địa ({unhandledSos} chưa xử lý)</div><table className="w-full min-w-[820px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Ảnh</th><th className="px-3 py-2.5">Vị trí</th><th className="px-3 py-2.5">Tình trạng</th><th className="px-3 py-2.5">Nhu cầu</th><th className="px-3 py-2.5">Liên hệ</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{sosReports.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-inkSoft">Chưa có báo cáo SOS nào.</td></tr> : sosReports.map((report) => <tr key={report.id} className="border-t border-line"><td className="px-3 py-2.5">{report.photo_url ? <a href={report.photo_url} target="_blank" rel="noreferrer"><img src={report.photo_url} alt="" className="h-12 w-12 rounded-[6px] object-cover" /></a> : <span className="text-xs text-inkSoft">—</span>}</td><td className="px-3 py-2.5"><strong className="text-chamDeep">{report.location_text}</strong>{report.description ? <div className="text-xs text-inkMid">{report.description}</div> : null}<div className="text-xs text-inkSoft">{fmtDate(report.created_at)}</div></td><td className="px-3 py-2.5"><Pill status={report.status} /></td><td className="px-3 py-2.5 text-inkMid">{report.needs.join(", ") || "—"}</td><td className="px-3 py-2.5 text-xs text-inkMid">{report.contact_phone ?? "—"}</td><td className="px-3 py-2.5">{report.status !== "handled" ? <form><button formAction={markSosHandled.bind(null, report.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Đánh dấu đã xử lý</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
         </section> : null}
       </main>
     </div>

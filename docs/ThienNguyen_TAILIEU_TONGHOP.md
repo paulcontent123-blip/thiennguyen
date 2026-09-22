@@ -22,7 +22,7 @@ Ngày 18/09/2026, Tech Lead đã chốt định hướng MVP như sau:
 1. Tổ chức dùng một tài khoản người đại diện pháp luật; không triển khai `org_owner`, `maker`, `checker` hoặc luồng mời thành viên trong MVP.
 2. Giải ngân không dùng Maker–Checker hai lớp. Người đại diện pháp luật upload chứng từ, ký/approval; hệ thống/Admin hậu kiểm và quản lý campaign.
 3. eKYC tổ chức được đơn giản hóa thành upload giấy phép hoạt động để Admin xem xét.
-4. Cứu trợ là luồng riêng do Admin quản lý. Hồ sơ cứu trợ không tự tạo quyền; chỉ hồ sơ được Admin duyệt mới được cấp/kích hoạt role kỹ thuật `rescue_team`.
+4. Cứu trợ là luồng riêng do Admin quản lý. Role kỹ thuật `rescue_team` không được đăng ký công khai; Admin có thể kích hoạt từ hồ sơ đã duyệt hoặc tạo lời mời trực tiếp qua email sau khi xác minh.
 5. Đăng ký công khai chỉ có `donor` và `org`; `admin` và `rescue_team` không được tự tạo từ auth công khai.
 
 Các phần phía dưới có nhắc Maker–Checker, sub-role nội bộ hoặc đăng ký đội cứu trợ công khai được giữ lại để truy vết lịch sử phân tích, nhưng **không còn là yêu cầu hiện hành**. Khi có mâu thuẫn, mục này và `ThienNguyen_Role_ChucNang_XacNhan_TechLead.md` được ưu tiên.
@@ -3634,7 +3634,7 @@ sequenceDiagram
 
 # QUYẾT ĐỊNH ĐÃ CHỐT VÀ CÂU HỎI VẬN HÀNH CÒN MỞ
 
-> Mô hình MVP hiện hành gồm bốn role kỹ thuật `donor`, `org`, `rescue_team`, `admin`; đăng ký công khai chỉ tạo `donor` hoặc `org`. Không triển khai các sub-role `org_owner`, `maker`, `checker`. Role `rescue_team` chỉ được kích hoạt sau khi Admin duyệt hồ sơ trong luồng cứu trợ riêng.
+> Mô hình MVP hiện hành gồm bốn role kỹ thuật `donor`, `org`, `rescue_team`, `admin`; đăng ký công khai chỉ tạo `donor` hoặc `org`. Không triển khai các sub-role `org_owner`, `maker`, `checker`. Role `rescue_team` chỉ được cấp qua luồng Admin: duyệt hồ sơ đã gửi hoặc tạo lời mời trực tiếp qua email.
 
 ---
 
@@ -3672,17 +3672,17 @@ Một Admin có được đồng thời xác minh giấy phép, duyệt campaign
 
 3.2. 🟡 Đã chốt Admin là bên quản lý đội cứu trợ; chưa chốt cơ chế cảnh cáo, tạm khóa, khóa vĩnh viễn, khiếu nại và tiêu chí ra quyết định.
 
-### 3.3. 🟡 Đề xuất — Admin mời thành viên cứu trợ qua Gmail cá nhân
+### 3.3. ✅ Admin mời đội cứu trợ qua Gmail cá nhân
 
-**Phương án đề xuất:** Không cho cá nhân tự đăng ký và tự kích hoạt role `rescue_team`. Sau khi Admin xác minh người/đội cứu trợ, Admin nhập Gmail cá nhân của người được mời và gửi lời mời tham gia mạng lưới cứu trợ.
+**Quyết định triển khai:** Không cho cá nhân tự đăng ký và tự kích hoạt role `rescue_team`. Sau khi Admin xác minh người/đội cứu trợ, Admin nhập Gmail cá nhân của người được mời và gửi lời mời tham gia mạng lưới cứu trợ. Hệ thống tạo Auth user bằng Service Role ở server, gán role `rescue_team`, tạo `rescue_teams` và gửi email đặt mật khẩu.
 
-**Luồng đề xuất:**
+**Luồng triển khai:**
 
 1. Admin mở khu vực **Quản lý cứu trợ → Mời thành viên**.
 2. Admin nhập Gmail cá nhân, họ tên, đội/đơn vị trực thuộc (nếu có), loại nguồn lực, địa bàn và bán kính hoạt động.
 3. Hệ thống tạo lời mời có trạng thái `pending`, token dùng một lần và thời hạn hết hiệu lực.
 4. Người nhận mở liên kết trong email, xác nhận thông tin và tạo tài khoản hoặc liên kết với tài khoản hiện có.
-5. Khi chấp nhận hợp lệ, hệ thống mới kích hoạt role kỹ thuật `rescue_team` và tạo hồ sơ `rescue_teams`.
+5. Tài khoản và hồ sơ `rescue_teams` được tạo sau khi Admin xác nhận; người nhận mở link để đặt mật khẩu và xác nhận lời mời.
 6. Admin có thể gửi lại, thu hồi hoặc vô hiệu hóa lời mời/tài khoản cứu trợ.
 
 **Ràng buộc đề xuất:**
@@ -3693,7 +3693,7 @@ Một Admin có được đồng thời xác minh giấy phép, duyệt campaign
 - Mọi thao tác gửi, chấp nhận, thu hồi và kích hoạt cần được lưu để tra soát nếu chính sách audit log được thông qua.
 - Nếu Gmail đã thuộc một tài khoản khác, hệ thống phải yêu cầu đăng nhập đúng tài khoản đó trước khi chấp nhận.
 
-**Điểm cần Tech Lead chốt:** Đây là cơ chế **invitation-only** hoàn toàn hay là bước kích hoạt sau khi cá nhân/đội đã gửi hồ sơ chờ Admin duyệt? Cá nhân độc lập có được Admin mời hay chỉ người thuộc một tổ chức đã xác minh giấy phép?
+**Phạm vi hiện tại:** Đây là nhánh Admin-only song song với luồng hồ sơ. Cá nhân/đội độc lập có thể được Admin mời sau khi Admin tự xác minh; Gmail chỉ là địa chỉ nhận lời mời, không thay thế bước xác minh năng lực. Chức năng gửi lại/thu hồi lời mời và khóa tài khoản là phần mở rộng tiếp theo.
 
 ## 4. Về đa vai trò của một người dùng
 

@@ -23,8 +23,10 @@ import {
   requestCampaignRevision,
   requestPersonalVerificationRevision,
   requestOrganizationRevision,
+  setCorporateInquiryStatus,
   upsertPlatformReceivingAccount,
 } from "@/app/admin/actions";
+import { budgetLabel, interestLabel } from "@/lib/corporate/options";
 import { RescueAccountForm } from "@/components/admin/rescue-account-form";
 import { createClient } from "@/lib/supabase/client";
 import { PROVINCES } from "@/lib/geo/provinces";
@@ -247,7 +249,21 @@ type Transaction = {
   campaigns: Related<{ title: string; slug: string }>;
 };
 
-type Panel = "overview" | "campaigns" | "kyc" | "personal" | "payments" | "disbursement" | "sos" | "donations";
+type CorporateInquiry = {
+  id: string;
+  company_name: string;
+  contact_name: string;
+  contact_email: string;
+  budget_range: string;
+  focus_area: string | null;
+  interest: string;
+  status: string;
+  created_at: string;
+  handled_at: string | null;
+  campaigns: Related<{ title: string }>;
+};
+
+type Panel = "overview" | "campaigns" | "kyc" | "personal" | "payments" | "disbursement" | "sos" | "donations" | "corporate";
 type CampaignFilter = "all" | "pending_review" | "needs_revision" | "approved";
 type AuditFilter = "pending" | "reviewed";
 
@@ -403,7 +419,7 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
   );
 }
 
-export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions }: { campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[] }) {
+export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries }: { corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[] }) {
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>("overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
@@ -470,6 +486,7 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
     { key: "personal", icon: "👤", label: "Xác minh cá nhân" },
     { key: "payments", icon: "🏦", label: "Tài khoản nhận tiền" },
     { key: "donations", icon: "🧾", label: "Đối soát quyên góp" },
+    { key: "corporate", icon: "🤝", label: `Yêu cầu doanh nghiệp${corporateInquiries.some((item) => item.status === "new") ? ` (${corporateInquiries.filter((item) => item.status === "new").length})` : ""}` },
     { key: "disbursement", icon: "💰", label: "Hậu kiểm giải ngân" },
     { key: "sos", icon: "📍", label: "SOS Reports" },
   ];
@@ -602,6 +619,11 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
               </div>
             </div>)}
           </div> : <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[860px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Mã giao dịch</th><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Người ủng hộ</th><th className="px-3 py-2.5">Xử lý lúc</th><th className="px-3 py-2.5">Trạng thái</th></tr></thead><tbody>{visibleTransactions.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-inkSoft">Chưa có giao dịch nào được xử lý.</td></tr> : visibleTransactions.map((tx) => <tr key={tx.id} className="border-t border-line align-top"><td className="px-3 py-2.5 font-mono text-xs text-chamDeep">{tx.tx_ref}</td><td className="px-3 py-2.5 text-inkMid">{firstRelated(tx.campaigns)?.title ?? "—"}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{amount(tx.amount_vnd)}</td><td className="px-3 py-2.5 text-inkMid">{tx.donor_name || "Ẩn danh"}<div className="text-xs text-inkSoft">{tx.receipt_email}</div></td><td className="px-3 py-2.5 text-xs text-inkSoft">{fmtDate(tx.completed_at ?? tx.created_at)}{tx.failure_reason ? <div className="mt-0.5 text-son">Lý do: {tx.failure_reason}</div> : null}</td><td className="px-3 py-2.5"><Pill status={tx.status} /></td></tr>)}</tbody></table></div>}
+        </section> : null}
+
+        {panel === "corporate" ? <section>
+          <div className="mb-5"><h1 className="font-serif text-[21px] font-medium text-chamDeep">Yêu cầu đồng hành từ doanh nghiệp</h1><p className="mt-1 max-w-3xl text-sm leading-6 text-inkMid">Các yêu cầu gửi từ trang Doanh nghiệp. Liên hệ qua email rồi đánh dấu trạng thái xử lý.</p></div>
+          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[900px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Doanh nghiệp</th><th className="px-3 py-2.5">Liên hệ</th><th className="px-3 py-2.5">Quan tâm</th><th className="px-3 py-2.5">Ngân sách/năm</th><th className="px-3 py-2.5">Gửi lúc</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{corporateInquiries.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-inkSoft">Chưa có yêu cầu nào.</td></tr> : corporateInquiries.map((item) => <tr key={item.id} className="border-t border-line align-top"><td className="px-3 py-3 font-semibold text-chamDeep">{item.company_name}{item.focus_area ? <div className="mt-0.5 text-xs font-normal text-inkSoft">Ưu tiên: {item.focus_area}</div> : null}</td><td className="px-3 py-3 text-inkMid">{item.contact_name}<div className="text-xs"><a href={`mailto:${item.contact_email}`} className="text-sky hover:underline">{item.contact_email}</a></div></td><td className="px-3 py-3 text-inkMid">{interestLabel(item.interest)}{firstRelated(item.campaigns)?.title ? <div className="text-xs text-sky">{firstRelated(item.campaigns)?.title}</div> : null}</td><td className="px-3 py-3 text-inkMid">{budgetLabel(item.budget_range)}</td><td className="px-3 py-3 text-xs text-inkSoft">{fmtDate(item.created_at)}</td><td className="px-3 py-3"><span className={`inline-flex rounded-[4px] px-2 py-0.5 text-xs font-bold ${item.status === "new" ? "bg-nghe/15 text-ngheDeep" : item.status === "contacted" ? "bg-sky/15 text-sky" : "bg-lua/15 text-lua"}`}>{item.status === "new" ? "Mới" : item.status === "contacted" ? "Đã liên hệ" : "Đã đóng"}</span></td><td className="px-3 py-3"><form className="flex flex-wrap gap-1.5">{item.status === "new" ? <button formAction={setCorporateInquiryStatus.bind(null, item.id, "contacted")} className="rounded-[4px] bg-sky/15 px-2.5 py-1.5 text-xs font-bold text-sky">Đã liên hệ</button> : null}{item.status !== "closed" ? <button formAction={setCorporateInquiryStatus.bind(null, item.id, "closed")} className="rounded-[4px] bg-lua/15 px-2.5 py-1.5 text-xs font-bold text-lua">Đóng</button> : <button formAction={setCorporateInquiryStatus.bind(null, item.id, "new")} className="rounded-[4px] bg-inkSoft/15 px-2.5 py-1.5 text-xs font-bold text-inkMid">Mở lại</button>}</form></td></tr>)}</tbody></table></div>
         </section> : null}
 
         {panel === "disbursement" ? <section>

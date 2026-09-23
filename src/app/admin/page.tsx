@@ -4,7 +4,7 @@ import { requirePageRole } from "@/lib/auth/server";
 export default async function AdminPage() {
   const { supabase } = await requirePageRole(["admin"], "/admin");
 
-  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes] = await Promise.all([
+  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id, title, owner_type, owner_user_id, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
@@ -52,6 +52,11 @@ export default async function AdminPage() {
       )
       .order("created_at", { ascending: false })
       .limit(200),
+    supabase
+      .from("corporate_inquiries")
+      .select("id, company_name, contact_name, contact_email, budget_range, focus_area, interest, status, created_at, handled_at, campaigns(title)")
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
 
   const personalProfiles = await Promise.all((personalProfilesRes.data ?? []).map(async (profile) => {
@@ -72,6 +77,7 @@ export default async function AdminPage() {
       sosReports={sosReportsRes.data ?? []}
       receivingAccounts={receivingAccountsRes.data ?? []}
       transactions={transactionsRes.data ?? []}
+      corporateInquiries={corporateInquiriesRes.data ?? []}
     />
   );
 }

@@ -46,13 +46,16 @@ export function SosMap({ reports }: { reports: SosMapReport[] }) {
       minZoom: 5,
       maxZoom: 16,
       maxBounds: [[5, 97], [25, 120]],
+      fadeAnimation: false,
     });
     mapRef.current = map;
 
-    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+    const tileOptions = { updateWhenIdle: true, keepBuffer: 1, maxZoom: 16 };
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+      ...tileOptions,
       attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ",
-      maxZoom: 18,
     }).addTo(map);
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}", tileOptions).addTo(map);
 
     return () => {
       map.remove();
@@ -99,5 +102,5 @@ export function SosMap({ reports }: { reports: SosMapReport[] }) {
     };
   }, [reports]);
 
-  return <div ref={containerRef} className="h-[420px] w-full rounded-[14px] sm:h-[520px]" />;
+  return <div ref={containerRef} className="isolate z-0 h-[420px] w-full rounded-[14px] sm:h-[520px]" />;
 }

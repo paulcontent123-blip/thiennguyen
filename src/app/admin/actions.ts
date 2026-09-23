@@ -874,6 +874,17 @@ export async function deleteRescueInvitation(invitationId: string): Promise<Resc
   }
 }
 
+export async function setCorporateInquiryStatus(id: string, status: "new" | "contacted" | "closed") {
+  const { supabase, user } = await requireAdmin();
+  const handled = status !== "new";
+  const { error } = await supabase
+    .from("corporate_inquiries")
+    .update({ status, handled_by: handled ? user.id : null, handled_at: handled ? new Date().toISOString() : null })
+    .eq("id", id);
+  assertMutationSucceeded(error, "Không thể cập nhật yêu cầu doanh nghiệp.");
+  revalidatePath("/admin");
+}
+
 export async function markSosHandled(id: string) {
   const { supabase, user } = await requireAdmin();
   const { error } = await supabase

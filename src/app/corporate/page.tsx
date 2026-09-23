@@ -1,9 +1,36 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
+import { CorporateInquiryModal } from "@/components/corporate/corporate-inquiry-modal";
 import { MatchingFundCalculator } from "@/components/corporate/matching-fund-calculator";
+import { hasSupabaseEnv } from "@/lib/supabase/env";
+import { createClient } from "@/lib/supabase/server";
 
-const PARTNER_EMAIL = "partner@thiennguyen.com.vn";
-const mailto = (subject: string) => `mailto:${PARTNER_EMAIL}?subject=${encodeURIComponent(subject)}`;
+const currency = new Intl.NumberFormat("vi-VN");
+
+type SponsorProject = { id: string; slug: string; title: string; province: string | null; targetAmount: number; receivedAmount: number; percent: number };
+
+async function getSponsorProjects(): Promise<SponsorProject[]> {
+  if (!hasSupabaseEnv()) return [];
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("id, slug, title, province, target_amount")
+    .eq("status", "active")
+    .order("published_at", { ascending: false })
+    .limit(12);
+  if (error || !data) return [];
+
+  const projects = await Promise.all(data.map(async (row) => {
+    const { data: summary } = await supabase.rpc("get_campaign_donation_summary", { p_campaign_id: row.id });
+    const summaryRow = Array.isArray(summary) ? summary[0] : summary;
+    const receivedAmount = Number(summaryRow?.total_amount_vnd ?? 0);
+    const targetAmount = Number(row.target_amount);
+    const percent = targetAmount > 0 ? Math.min(100, Math.round((receivedAmount / targetAmount) * 100)) : 0;
+    return { id: row.id, slug: row.slug, title: row.title, province: row.province, targetAmount, receivedAmount, percent };
+  }));
+
+  return projects.sort((a, b) => a.percent - b.percent).slice(0, 3);
+}
 
 const formats = [
   { anchor: "corp-m1", icon: "🏫", title: "Tài trợ Công trình Trọn gói", subtitle: "Co-Branded Impact" },
@@ -18,7 +45,9 @@ const nonMonetaryTypes = [
   { icon: "🎓", title: "Tri thức & đào tạo", body: "Chương trình tập huấn, chuyển giao kỹ năng cho cộng đồng thụ hưởng." },
 ] as const;
 
-export default function CorporatePage() {
+export default async function CorporatePage() {
+  const projects = await getSponsorProjects();
+
   return (
     <main>
       <SiteHeader />
@@ -38,12 +67,14 @@ export default function CorporatePage() {
               Không phải &ldquo;mua gói CSR&rdquo;. Đây là nền tảng để doanh nghiệp đồng hành trực tiếp vào các chiến dịch có địa chỉ thực — theo dõi tiến độ giải ngân công khai, có bằng chứng thực địa cho từng khoản chi.
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
-              <a href={mailto("Đăng ký đồng hành")} className="rounded-[40px] bg-son px-6 py-3 text-sm font-bold text-white transition hover:bg-son/90">
-                Đăng ký đồng hành →
-              </a>
-              <a href={mailto("Yêu cầu tài liệu giới thiệu")} className="rounded-[40px] border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15">
-                Yêu cầu tài liệu giới thiệu
-              </a>
+              <CorporateInquiryModal
+                triggerClassName="rounded-[40px] bg-son px-6 py-3 text-sm font-bold text-white transition hover:bg-son/90"
+                triggerLabel="Đăng ký đồng hành →"
+              />
+              <CorporateInquiryModal
+                triggerClassName="rounded-[40px] border border-white/25 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+                triggerLabel="Yêu cầu tài liệu giới thiệu"
+              />
             </div>
           </div>
         </div>
@@ -98,11 +129,38 @@ export default function CorporatePage() {
               Xem các chiến dịch đang cần tài trợ →
             </Link>
           </div>
-          <div className="rounded-[14px] border-2 border-dashed border-lineStrong bg-paperMid p-8 text-center">
-            <div className="text-3xl" aria-hidden="true">🏗️</div>
-            <p className="mt-3 text-sm leading-6 text-inkMid">
-              Danh sách công trình đề xuất riêng cho doanh nghiệp sẽ mở khi có yêu cầu đăng ký — hiện tại bạn có thể xem toàn bộ chiến dịch đang hoạt động tại trang Khám phá.
-            </p>
+          <div className="flex flex-col gap-3">
+            {projects.length === 0 ? (
+              <div className="rounded-[14px] border-2 border-dashed border-lineStrong bg-paperMid p-8 text-center text-sm leading-6 text-inkMid">
+                Chưa có chiến dịch nào đang hoạt động. Hãy để lại yêu cầu, đội ngũ sẽ đề xuất công trình phù hợp.
+              </div>
+            ) : (
+              projects.map((project) => (
+                <div key={project.id} className="flex items-start gap-3 rounded-[8px] border border-line bg-white p-4">
+                  <div className="min-w-0 flex-1">
+                    <Link href={`/campaigns/${encodeURIComponent(project.slug)}`} className="text-sm font-bold text-chamDeep hover:text-son">
+                      {project.title}
+                    </Link>
+                    <div className="mt-0.5 text-xs text-inkSoft">{project.province ? `📍 ${project.province}` : "Toàn quốc"}</div>
+                    <div className="mt-2 h-1 overflow-hidden rounded-full bg-paperDeep">
+                      <div className="h-full rounded-full bg-son" style={{ width: `${project.percent}%` }} />
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap justify-between gap-x-3 text-xs">
+                      <span className="font-mono font-bold text-son">Mục tiêu {currency.format(project.targetAmount)}đ</span>
+                      <span className={project.percent === 0 ? "text-son" : "text-ngheDeep"}>
+                        {project.percent === 0 ? "Cần nhà tài trợ" : `${project.percent}% đã ghi nhận`}
+                      </span>
+                    </div>
+                  </div>
+                  <CorporateInquiryModal
+                    interest="co_branded"
+                    campaign={{ id: project.id, title: project.title }}
+                    triggerClassName="shrink-0 rounded-[4px] bg-son px-3 py-1.5 text-[11.5px] font-bold text-white transition hover:bg-son/90"
+                    triggerLabel="Đăng ký"
+                  />
+                </div>
+              ))
+            )}
           </div>
         </div>
 
@@ -122,9 +180,13 @@ export default function CorporatePage() {
                 <li className="flex gap-2"><span className="font-bold text-lua">✓</span> Nhân viên quyên 100.000đ → doanh nghiệp đối ứng thêm theo hệ số đã thoả thuận</li>
                 <li className="flex gap-2"><span className="font-bold text-lua">✓</span> Theo dõi tổng số tiền đã ghi nhận trên trang chiến dịch công khai</li>
               </ul>
-              <a href={mailto("Yêu cầu kết nối chương trình Matching Fund")} className="mt-5 inline-flex rounded-[40px] bg-nghe px-5 py-2.5 text-sm font-bold text-white transition hover:bg-nghe/90">
-                Yêu cầu kết nối nguồn lực →
-              </a>
+              <div className="mt-5">
+                <CorporateInquiryModal
+                  interest="matching_fund"
+                  triggerClassName="inline-flex rounded-[40px] bg-nghe px-5 py-2.5 text-sm font-bold text-white transition hover:bg-nghe/90"
+                  triggerLabel="Yêu cầu kết nối nguồn lực →"
+                />
+              </div>
             </div>
             <MatchingFundCalculator />
           </div>
@@ -141,9 +203,13 @@ export default function CorporatePage() {
             <p className="mt-3 text-sm leading-7 text-inkMid">
               Không chỉ dừng ở tiền mặt — doanh nghiệp có thể đồng hành bằng hiện vật, phương tiện, hoặc ngày công chuyên môn phù hợp với nhu cầu thực tế của từng chiến dịch.
             </p>
-            <a href={mailto("Đăng ký đóng góp nguồn lực phi tiền tệ")} className="mt-5 inline-flex rounded-[40px] bg-sky px-5 py-2.5 text-sm font-bold text-white transition hover:bg-sky/90">
-              Kết nối nguồn lực →
-            </a>
+            <div className="mt-5">
+              <CorporateInquiryModal
+                interest="in_kind"
+                triggerClassName="inline-flex rounded-[40px] bg-sky px-5 py-2.5 text-sm font-bold text-white transition hover:bg-sky/90"
+                triggerLabel="Kết nối nguồn lực →"
+              />
+            </div>
           </div>
           <div className="flex flex-col gap-3">
             {nonMonetaryTypes.map((item) => (
@@ -170,9 +236,13 @@ export default function CorporatePage() {
           <p className="mt-3 max-w-2xl text-sm leading-7 text-white/65">
             Định hướng phát triển: tự động gom chứng từ số (hóa đơn, ảnh bằng chứng thực địa, biên bản nghiệm thu) thành báo cáo tác động hàng năm cho doanh nghiệp — hiện chưa triển khai. Nếu doanh nghiệp quan tâm, để lại yêu cầu để chúng tôi ưu tiên xây dựng theo nhu cầu thực tế.
           </p>
-          <a href={mailto("Quan tâm chương trình ESG Hub")} className="mt-6 inline-flex rounded-[40px] bg-nghe px-5 py-2.5 text-sm font-bold text-white transition hover:bg-nghe/90">
-            Đăng ký quan tâm →
-          </a>
+          <div className="mt-6">
+            <CorporateInquiryModal
+              interest="esg_hub"
+              triggerClassName="inline-flex rounded-[40px] bg-nghe px-5 py-2.5 text-sm font-bold text-white transition hover:bg-nghe/90"
+              triggerLabel="Đăng ký quan tâm →"
+            />
+          </div>
         </div>
 
         {/* CO-MONITORING CTA */}
@@ -183,9 +253,7 @@ export default function CorporatePage() {
               Doanh nghiệp có thể cử nhân viên trực tiếp tham gia các đợt bàn giao cùng chiến dịch đã đồng hành.
             </p>
           </div>
-          <a href={mailto("Đăng ký cử nhân sự đồng hành")} className="button-primary">
-            Đăng ký cử nhân sự →
-          </a>
+          <CorporateInquiryModal interest="field_staff" triggerClassName="button-primary" triggerLabel="Đăng ký cử nhân sự →" />
         </div>
       </section>
     </main>

@@ -103,6 +103,37 @@ export function sendDonationConfirmedEmail(input: DonationConfirmedEmailInput): 
   });
 }
 
+type CorporateInquiryEmailInput = {
+  to: string;
+  inquiryId: string;
+  companyName: string;
+  contactName: string;
+  contactEmail: string;
+  budgetLabel: string;
+  focusArea?: string | null;
+  interestLabel: string;
+  campaignTitle?: string | null;
+};
+
+export function sendCorporateInquiryNotification(input: CorporateInquiryEmailInput): Promise<EmailSendResult> {
+  const rows: [string, string][] = [
+    ["Doanh nghiệp", input.companyName],
+    ["Người liên hệ", `${input.contactName} <${input.contactEmail}>`],
+    ["Hình thức quan tâm", input.interestLabel],
+    ["Ngân sách CSR/năm", input.budgetLabel],
+    ["Lĩnh vực ưu tiên", input.focusArea || "—"],
+    ["Chiến dịch", input.campaignTitle || "—"],
+  ];
+
+  return getEmailProvider().send({
+    to: input.to,
+    subject: `Yêu cầu đồng hành mới: ${input.companyName}`,
+    text: rows.map(([label, value]) => `${label}: ${value}`).join("\n"),
+    html: `<p>Có yêu cầu đồng hành mới từ trang Doanh nghiệp:</p><ul>${rows.map(([label, value]) => `<li><strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}</li>`).join("")}</ul>`,
+    idempotencyKey: `corporate-inquiry:${input.inquiryId}`,
+  });
+}
+
 export function sendRescueInvitationEmail(input: RescueInvitationEmailInput): Promise<EmailSendResult> {
   const recipientName = escapeHtml(input.recipientName);
   const teamName = escapeHtml(input.teamName);

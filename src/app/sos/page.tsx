@@ -45,6 +45,7 @@ export default async function SosPage() {
 
   return (
     <main className="min-h-screen bg-paper">
+      <link rel="preconnect" href="https://server.arcgisonline.com" crossOrigin="" />
       <SiteHeader />
 
       <div className="bg-son py-2.5">

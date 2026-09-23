@@ -120,6 +120,27 @@ Sender: EMAIL_FROM
 
 OTP vẫn do Supabase Auth phát hành và xác thực; Resend chỉ đảm nhiệm vận chuyển email. Các hàm email nghiệp vụ nằm ở `src/lib/email/notifications.ts`, gồm biên nhận PDF và cập nhật chiến dịch.
 
+### Google OAuth, email OTP và đặt lại mật khẩu
+
+Ứng dụng chỉ dùng email cho xác thực; số điện thoại (nếu người dùng cung cấp) chỉ là thông tin liên hệ, không dùng SMS OTP.
+
+Trong Supabase Dashboard:
+
+1. Vào **Authentication → Providers → Google**, bật Google và nhập Client ID/Client Secret từ Google Auth Platform.
+2. Trong Google OAuth Client, thêm callback URI được Supabase hiển thị, dạng `https://<project-ref>.supabase.co/auth/v1/callback`.
+3. Vào **Authentication → URL Configuration**:
+   - Site URL local: `http://localhost:3000`.
+   - Redirect URLs: `http://localhost:3000/**` và `https://thiennguyen.com.vn/**`.
+4. Trong **Authentication → Email Templates → Magic Link**, phải dùng biến `{{ .Token }}` để email hiển thị mã OTP 6 số, ví dụ:
+
+```html
+<h2>Mã đăng nhập Thiện Nguyện</h2>
+<p>Mã OTP của bạn: <strong>{{ .Token }}</strong></p>
+<p>Không cung cấp mã này cho người khác.</p>
+```
+
+Google OAuth, xác nhận đăng ký và password recovery đều quay về `/auth/callback` để đổi PKCE code thành session cookie. Email khôi phục sau đó chuyển người dùng đến `/reset-password`.
+
 Khi cần chuyển sang SendGrid, đổi cấu hình:
 
 ```env

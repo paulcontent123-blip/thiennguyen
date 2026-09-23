@@ -24,6 +24,7 @@ Ngày 18/09/2026, Tech Lead đã chốt định hướng MVP như sau:
 3. eKYC tổ chức được đơn giản hóa thành upload giấy phép hoạt động để Admin xem xét.
 4. Cứu trợ là luồng riêng do Admin quản lý. Role kỹ thuật `rescue_team` không được đăng ký công khai; Admin có thể kích hoạt từ hồ sơ đã duyệt hoặc tạo lời mời trực tiếp qua email sau khi xác minh.
 5. Đăng ký công khai chỉ có `donor` và `org`; `admin` và `rescue_team` không được tự tạo từ auth công khai.
+6. Xác thực người dùng chỉ dùng email: Email/Mật khẩu, Google SSO, OTP qua email và khôi phục mật khẩu qua email. Không dùng SMS OTP; số điện thoại chỉ là thông tin liên hệ. Mọi mô tả Twilio/VNPT hoặc bắt buộc xác minh số điện thoại phía dưới chỉ được giữ để truy vết lịch sử và không còn là yêu cầu MVP.
 
 Các phần phía dưới có nhắc Maker–Checker, sub-role nội bộ hoặc đăng ký đội cứu trợ công khai được giữ lại để truy vết lịch sử phân tích, nhưng **không còn là yêu cầu hiện hành**. Khi có mâu thuẫn, mục này và `ThienNguyen_Role_ChucNang_XacNhan_TechLead.md` được ưu tiên.
 
@@ -127,7 +128,7 @@ Single HTML file tự chứa. Không cần server, không cần database, không
 | **Hosting** | Vercel (frontend) + Supabase (DB + Auth + Storage + Realtime) |
 | **CDN** | Cloudflare (DNS + CDN + DDoS protection) |
 | **KYC** | Upload giấy phép hoạt động; Admin duyệt thủ công trong MVP |
-| **SMS OTP** | Twilio hoặc VNPT iGate SMS — SOS phone verification |
+| **Email OTP** | Supabase Auth + Custom SMTP Resend — đăng nhập không mật khẩu; không dùng SMS OTP |
 
 ### 2.3 Domain & Infrastructure
 
@@ -244,7 +245,7 @@ Nền tảng đầu tiên tại VN cho phép đóng góp 2 chiều: nhận wishl
 
 | Method & Route | Mô tả |
 |---|---|
-| `POST /api/sos/reports` | Tạo SOS report (cần phone OTP + GPS + photo) |
+| `POST /api/sos/reports` | Tạo SOS report (yêu cầu phiên đăng nhập email + GPS + photo; SĐT chỉ để liên hệ) |
 | `GET /api/sos/reports` | Danh sách SOS markers (lat, lng, type, trust_score) |
 | `POST /api/rescue-applications` | Gửi hồ sơ cứu trợ, mặc định `pending_review`; không tự cấp role |
 | `PATCH /api/admin/rescue-applications/:id/review` | Admin duyệt/từ chối/yêu cầu bổ sung và cấp quyền khi approved |
@@ -255,8 +256,8 @@ Nền tảng đầu tiên tại VN cho phép đóng góp 2 chiều: nhận wishl
 
 | Method & Route | Mô tả |
 |---|---|
-| `POST /api/auth/send-otp` | Gửi OTP SMS (Twilio/VNPT iGate) |
-| `POST /api/auth/verify-otp` | Xác minh OTP → issue JWT |
+| Supabase `signInWithOtp` | Gửi OTP 6 số qua email, không tự tạo tài khoản lạ |
+| Supabase `verifyOtp` | Xác minh email OTP → tạo session |
 | `POST /api/kyc/license` | Tổ chức upload giấy phép hoạt động |
 | `GET /api/kyc/:orgId/status` | Trạng thái giấy phép (pending_review/verified/needs_revision/rejected) |
 | `POST /api/vat/verify` | Xác minh mã hóa đơn VAT qua API Tổng cục Thuế |
@@ -378,11 +379,6 @@ VIETQR_API_KEY=your_vietqr_key
 BANK_WEBHOOK_SECRET=your_webhook_secret
 TCB_ACCOUNT_NO=19033xxxxxxx
 TCB_BANK_ID=TCB
-
-# SMS OTP (Twilio hoặc VNPT)
-TWILIO_ACCOUNT_SID=your_sid
-TWILIO_AUTH_TOKEN=your_token
-TWILIO_PHONE_NUMBER=+84xxxxxxxxx
 
 # Email
 RESEND_API_KEY=re_xxxxxxxxx
@@ -513,7 +509,7 @@ vercel logs --follow
 | **Tài khoản Ngân hàng** | Hai tài khoản trung tâm của công ty thành viên VEA Group: một tài khoản VND trong nước và một tài khoản quốc tế/ngoại tệ |
 | **VietQR API key** | Đăng ký tại vietqr.io — miễn phí, lấy bankId + accountNo |
 | **Webhook endpoint** | Backend nhận POST từ ngân hàng khi có biến động số dư |
-| **SMS OTP** | Twilio (quốc tế) hoặc VNPT iGate SMS (VN) — xác minh SOS, auth |
+| **Email OTP** | Supabase Auth + Resend SMTP; số điện thoại chỉ dùng làm thông tin liên hệ |
 | **Supabase project** | Free tier: 500MB DB + 1GB storage + Realtime đủ cho MVP |
 | **API Tổng cục Thuế** | Đăng ký tại thuedientu.gdt.gov.vn để xác minh hóa đơn VAT |
 | **Giấy phép hoạt động** | Đăng ký tổ chức phi lợi nhuận hoặc doanh nghiệp công nghệ hỗ trợ từ thiện |
@@ -619,7 +615,7 @@ vercel logs --follow
 | Actor phụ | Vai trò |
 |---|---|
 | **Ngân hàng / VietQR Gateway** | Sinh mã QR động, gửi Webhook biến động số dư (Techcombank/VCB) |
-| **Cổng SMS OTP** (Twilio/VNPT iGate) | Gửi & xác thực mã OTP cho SOS report và đăng ký tài khoản |
+| **Supabase Auth + Resend SMTP** | Google SSO, gửi/xác thực OTP email và khôi phục mật khẩu |
 | **API Tổng cục Thuế** | Xác minh mã hóa đơn VAT thật/giả trước khi duyệt giải ngân |
 | **Cron Scheduler** (Vercel Cron) | Kích hoạt tác vụ định kỳ (băm SHA-256 tài chính cuối ngày) |
 | **Email/PDF Service** (Resend, Puppeteer/react-pdf) | Gửi biên nhận PDF, xuất báo cáo ESG |
@@ -692,11 +688,11 @@ flowchart LR
 |---|---|---|---|
 | UC-AUTH-01 | Đăng ký tài khoản (Cá nhân / Doanh nghiệp) | Khách vãng lai | 🟢 |
 | UC-AUTH-02 | Đăng nhập bằng Email/Mật khẩu | Khách vãng lai | 🟢 |
-| UC-AUTH-03 | Đăng nhập nhanh qua Google (SSO) | Khách vãng lai | 🟡 |
+| UC-AUTH-03 | Đăng nhập nhanh qua Google (SSO) | Khách vãng lai | 🟢 code / cần bật Google Provider |
 | UC-AUTH-04 | Gửi hồ sơ đăng ký hoạt động cứu trợ | Cá nhân / Đội cứu trợ | 🟢 UI / 🔴 backend xét duyệt |
 | UC-AUTH-05 | Admin duyệt hồ sơ và kích hoạt tài khoản `rescue_team` | Quản trị viên | 🔴 backend |
-| UC-AUTH-06 | Xác thực OTP số điện thoại | Donor / SOS Reporter | 🟡 |
-| UC-AUTH-07 | Đăng xuất tài khoản | Donor / Org / Admin | 🔴 (gap — cần bổ sung Phase 1) |
+| UC-AUTH-06 | Đăng nhập bằng OTP qua email (không dùng SMS OTP) | Donor / Org / Admin / Rescue Team | 🟢 code / cần cấu hình email template |
+| UC-AUTH-07 | Đăng xuất tài khoản | Donor / Org / Admin / Rescue Team | 🟢 |
 | UC-AUTH-08 | Gửi hồ sơ xác minh chủ sở hữu cá nhân | Nhà hảo tâm / Quản trị viên | 🟢 UI + backend/RLS |
 
 ### Module B — Khám phá & Tra cứu chiến dịch (`UC-DISC`)
@@ -829,7 +825,7 @@ flowchart LR
 |---|---|---|---|
 | UC-SYS-01 | Sinh mã VietQR động (API `/api/vietqr/generate`) | Hệ thống (được Donor kích hoạt) | 🔴 |
 | UC-SYS-02 | Nhận & xử lý Webhook biến động số dư ngân hàng | Ngân hàng | 🔴 |
-| UC-SYS-03 | Gửi & xác minh OTP SMS (Twilio/VNPT iGate) | Cổng SMS OTP | 🔴 |
+| UC-SYS-03 | Gửi & xác minh OTP qua email | Supabase Auth + Resend SMTP | 🟢 code / cần cấu hình template |
 | UC-SYS-04 | Upload giấy phép hoạt động để Admin xác minh | Tổ chức / Quản trị viên | 🔴 backend |
 | UC-SYS-05 | Sinh & lưu SHA-256 hash tài chính hàng ngày (cron 23:59) | Cron Scheduler | 🔴 |
 | UC-SYS-06 | Xác minh hóa đơn VAT qua API Tổng cục Thuế | API Tổng cục Thuế | 🔴 |
@@ -861,12 +857,14 @@ flowchart LR
 
 #### UC-AUTH-02 — Đăng nhập bằng Email/Mật khẩu
 - **Actor chính:** Khách vãng lai
-- **Luồng sự kiện chính:** Mở `auth-modal` (tab "Đăng nhập") → nhập Email + Mật khẩu → bấm "Đăng nhập →" (`doLogin()`) → hệ thống xác thực và đóng modal.
-- **Ngoại lệ:** Sai email/mật khẩu → thông báo lỗi (🔴 cần bổ sung xử lý thật; prototype hiện đăng nhập luôn thành công để demo).
-- **Hậu điều kiện:** Người dùng vào trạng thái đã đăng nhập, truy cập được `pg-account`, `pg-notifications`.
+- **Luồng sự kiện chính:** Mở modal → nhập Email + Mật khẩu → Supabase Auth xác thực → hệ thống đọc `profiles.role` và chuyển đến portal phù hợp.
+- **Quên mật khẩu:** Gọi `resetPasswordForEmail`; email dẫn qua callback PKCE đến `/reset-password`, người dùng nhập mật khẩu mới bằng `updateUser` rồi đăng nhập lại.
+- **Ngoại lệ:** Sai email/mật khẩu hoặc recovery link hết hạn → hiển thị lỗi, không tạo session.
+- **Hậu điều kiện:** Người dùng có session cookie SSR và chỉ truy cập được route đúng role.
 
 #### UC-AUTH-03 — Đăng nhập nhanh qua Google (SSO)
-- Actor chính: Khách vãng lai. Nút "Tiếp tục với Google" trong `auth-modal` hiện tại gọi cùng hàm `doLogin()` (chưa tích hợp OAuth thật). Production cần tích hợp Supabase Auth Social Login.
+- Actor chính: Khách vãng lai. Nút "Tiếp tục với Google" gọi Supabase `signInWithOAuth`, quay về `/auth/callback` để đổi PKCE code thành session. Tài khoản Google mới mặc định là `donor`; tài khoản tổ chức vẫn phải đăng ký qua form tổ chức để tạo đúng hồ sơ pháp lý.
+- Điều kiện vận hành: Google Provider phải được bật trong Supabase và callback URL của Supabase phải được khai báo trong Google Auth Platform.
 
 #### UC-AUTH-04 — Gửi hồ sơ đăng ký hoạt động cứu trợ
 - **Actor chính:** Cá nhân / Đội cứu trợ chưa được kích hoạt.
@@ -882,13 +880,13 @@ flowchart LR
 - **Luồng sự kiện chính:** Admin xem hồ sơ → duyệt, từ chối hoặc yêu cầu bổ sung. Khi duyệt, hệ thống mới tạo/kích hoạt tài khoản nội bộ có role `rescue_team` và bản ghi `rescue_teams`.
 - **Quy tắc nghiệp vụ:** Cổng đăng nhập/điều phối cứu trợ không phải luồng đăng ký công khai; chỉ tài khoản đã được Admin cấp mới được truy cập.
 
-#### UC-AUTH-06 — Xác thực OTP số điện thoại
-- **Actor chính:** Nhà hảo tâm / Người báo SOS; **Actor phụ:** Cổng SMS OTP (Twilio/VNPT).
-- Dùng chung ở 2 nơi: đăng ký tài khoản production, và bắt buộc trong luồng SOS (UC-SOS-03 bước 1). Trong prototype: `sendSOSOTP()` sinh OTP giả lập, `verifySOSOTP()` xác nhận bất kỳ mã 6 số nào.
-- **Hậu điều kiện:** SĐT được gắn cờ `phone_verified = true`.
+#### UC-AUTH-06 — Đăng nhập bằng OTP qua email
+- **Actor chính:** Người dùng đã có tài khoản; **Actor phụ:** Supabase Auth và Resend SMTP.
+- Người dùng nhập email đã đăng ký; hệ thống gọi `signInWithOtp` với `shouldCreateUser = false`, gửi mã 6 số và xác minh bằng `verifyOtp`.
+- **Hậu điều kiện:** Tạo session đăng nhập tương ứng với role hiện có. Không xác minh số điện thoại và không tự tạo tài khoản mới qua OTP.
 
-#### UC-AUTH-07 — Đăng xuất tài khoản 🔴
-- Không tồn tại trong prototype (không có nút/hàm logout). Cần bổ sung ở Next.js production: xóa JWT session, chuyển hướng về trang chủ.
+#### UC-AUTH-07 — Đăng xuất tài khoản
+- Gọi Supabase `signOut`, xóa session cookie và chuyển hướng về trang chủ.
 
 ---
 
@@ -1009,16 +1007,16 @@ flowchart LR
 #### UC-SOS-02 — Xem chi tiết điểm SOS
 - Bấm vào marker → `showSOSPopup(id)` hiển thị popup: mô tả tình trạng, nhu cầu, số người ảnh hưởng, SĐT đã masking, trust score.
 
-#### UC-SOS-03 — Phát tín hiệu SOS ⭐ (luồng lõi — Anti-spam 5 tầng)
-- **Actor chính:** Người báo SOS; **Actor phụ:** Cổng SMS OTP, AI trust-scoring service
+#### UC-SOS-03 — Phát tín hiệu SOS ⭐ (luồng lõi)
+- **Actor chính:** Người báo SOS đã xác thực email; **Actor phụ:** AI trust-scoring service (nếu triển khai)
 - **Tiền điều kiện:** Mở `sos-report-modal` từ `pg-map` (nút "Phát tín hiệu SOS").
 - **Luồng sự kiện chính (4 bước xác minh hiển thị trực quan qua `sos-verify-steps`):**
-  1. **Bước 1 — SMS OTP:** Nhập số điện thoại khẩn cấp → bấm "Gửi OTP" (`sendSOSOTP()`) → nhập mã 6 số → "Xác nhận" (`verifySOSOTP()`). SĐT không hiển thị công khai (masking theo NĐ 13/2023).
+  1. **Bước 1 — Phiên đăng nhập:** Hệ thống yêu cầu tài khoản đã xác thực qua email. Số điện thoại khẩn cấp chỉ dùng để liên hệ và không được dùng làm yếu tố xác thực.
   2. **Bước 2 — GPS thiết bị:** Bấm "📍 Lấy GPS" (`getLocation()`) → trình duyệt lấy tọa độ thật từ thiết bị → điền tự động vào ô vị trí (readonly).
   3. **Bước 3 — Ảnh hiện trường:** Chụp/upload ảnh hiện trường (bắt buộc) → hệ thống đọc GPS EXIF từ ảnh để đối chiếu với vị trí đã khai báo ở bước 2.
   4. Điền mô tả tình trạng, chọn nhu cầu khẩn cấp (Lương thực/Y tế/Xe cứu thương/Xuồng máy/Nơi trú ẩn), số người bị ảnh hưởng, liên hệ khẩn.
   5. **Bước 4 — Gửi SOS:** Bấm "🚨 Phát tín hiệu SOS ngay" (`submitSOS()`).
-  6. Hệ thống chạy AI chấm **trust score 0–100** dựa trên: SIM có tỉnh, GPS thiết bị khớp EXIF ảnh, lịch sử nhận cứu trợ trước đó.
+  6. Nếu triển khai trust score, hệ thống chấm dựa trên GPS thiết bị, EXIF ảnh, độ đầy đủ hồ sơ và lịch sử báo cáo; không dùng trạng thái SIM/OTP điện thoại.
 - **Luồng thay thế theo trust score:**
   - `< 60`: báo cáo vào trạng thái **pending review** (Admin phải duyệt thủ công trước khi hiển thị công khai).
   - `60–80`: hiển thị trên bản đồ công khai nhưng kèm cảnh báo độ tin cậy trung bình.
@@ -1247,8 +1245,8 @@ Truy cập `pg-admin`, 5 panel điều hướng bằng `switchAdminPanel`.
 #### UC-SYS-02 — Nhận & xử lý Webhook biến động số dư ngân hàng
 - Đặc tả đầy đủ tại UC-DON-05.
 
-#### UC-SYS-03 — Gửi & xác minh OTP SMS
-- `POST /api/auth/send-otp`, `POST /api/auth/verify-otp` qua Twilio (quốc tế) hoặc VNPT iGate (trong nước) — nền cho UC-AUTH-06 và UC-SOS-03 bước 1.
+#### UC-SYS-03 — Gửi & xác minh OTP email
+- Supabase Auth `signInWithOtp` và `verifyOtp` gửi/xác minh mã qua Resend Custom SMTP. Không dùng Twilio/VNPT hoặc SMS OTP.
 
 #### UC-SYS-04 — Upload giấy phép hoạt động tổ chức
 - `POST /api/kyc/license`: nhận file giấy phép hoạt động và thông tin người đại diện → lưu hồ sơ `pending` để Admin xác minh thủ công. OCR không nằm trong phạm vi MVP.

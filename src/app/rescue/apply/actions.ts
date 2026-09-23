@@ -9,6 +9,26 @@ import { RESCUE_RESOURCE_TYPES } from "@/lib/rescue/resource-types";
 
 export type RescueApplyResult = { ok: true; message: string } | { ok: false; message: string };
 
+export type MyRescueApplicationStatus = {
+  id: string;
+  status: string;
+  review_note: string | null;
+  team_name: string | null;
+  created_at: string;
+} | null;
+
+export async function getMyRescueApplicationStatus(): Promise<MyRescueApplicationStatus> {
+  const { supabase, user } = await requireActionRole(APP_ROLES);
+  const { data } = await supabase
+    .from("rescue_applications")
+    .select("id, status, review_note, team_name, created_at")
+    .eq("submitted_by", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}
+
 const EVIDENCE_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/webp"];
 const MAX_EVIDENCE_SIZE = 10 * 1024 * 1024;
 const MAX_EVIDENCE_FILES = 3;

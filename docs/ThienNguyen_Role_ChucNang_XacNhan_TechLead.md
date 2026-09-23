@@ -2,6 +2,8 @@
 
 > Nguồn: `ThienNguyen_TAILIEU_TONGHOP.md` và phản hồi Tech Lead ngày 18/09/2026. Tài liệu này là nguồn quyết định hiện hành cho role, onboarding tổ chức, giải ngân và cứu trợ. Các mô tả Maker–Checker hoặc đăng ký cứu trợ công khai trong tài liệu cũ được xem là lịch sử và không còn áp dụng cho MVP.
 
+> Cập nhật xác thực: MVP không xác thực bằng SMS/số điện thoại. Hệ thống dùng Email/Mật khẩu, Google SSO, OTP qua email và liên kết đặt lại mật khẩu qua email. Số điện thoại chỉ là dữ liệu liên hệ nghiệp vụ.
+
 ---
 
 ## 1. Quyết định đã chốt

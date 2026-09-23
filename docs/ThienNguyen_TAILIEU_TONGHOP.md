@@ -303,7 +303,7 @@ Nền tảng đầu tiên tại VN cho phép đóng góp 2 chiều: nhận wishl
 - **Nghị định 93/2021/NĐ-CP:** Vận động, tiếp nhận, phân phối và sử dụng nguồn đóng góp tự nguyện → Cơ chế 90% Execution / 10% Operation Fund
 - **Nghị định 13/2023/NĐ-CP:** Bảo vệ dữ liệu cá nhân → Masking SĐT, CCCD người thụ hưởng; không lưu giữ thông tin thẻ ngân hàng
 - **API Tổng cục Thuế:** Xác minh mã hóa đơn VAT thật/giả trước khi duyệt giải ngân
-- **Disclaimer Partner Campaign:** Tiền chuyển thẳng đến tài khoản tổ chức thụ hưởng — đơn vị thụ hưởng chịu toàn bộ trách nhiệm pháp lý
+- **Disclaimer Partner Campaign:** Tiền được tiếp nhận qua tài khoản trung tâm của một công ty thành viên VEA Group, sau đó được đối soát và phân bổ cho tổ chức thụ hưởng theo hồ sơ đã duyệt.
 - **GRI Standards** (GRI 413-1, GRI 203-1) + **UN SDGs** 1/3/4/17: Chuẩn báo cáo ESG xuất cho doanh nghiệp kiểm toán
 
 ---
@@ -510,7 +510,7 @@ vercel logs --follow
 
 | Hạng mục | Ghi chú |
 |---|---|
-| **Tài khoản Ngân hàng** | Techcombank Business (hoặc VCB) — tài khoản tổ chức có tên khớp |
+| **Tài khoản Ngân hàng** | Hai tài khoản trung tâm của công ty thành viên VEA Group: một tài khoản VND trong nước và một tài khoản quốc tế/ngoại tệ |
 | **VietQR API key** | Đăng ký tại vietqr.io — miễn phí, lấy bankId + accountNo |
 | **Webhook endpoint** | Backend nhận POST từ ngân hàng khi có biến động số dư |
 | **SMS OTP** | Twilio (quốc tế) hoặc VNPT iGate SMS (VN) — xác minh SOS, auth |
@@ -697,6 +697,7 @@ flowchart LR
 | UC-AUTH-05 | Admin duyệt hồ sơ và kích hoạt tài khoản `rescue_team` | Quản trị viên | 🔴 backend |
 | UC-AUTH-06 | Xác thực OTP số điện thoại | Donor / SOS Reporter | 🟡 |
 | UC-AUTH-07 | Đăng xuất tài khoản | Donor / Org / Admin | 🔴 (gap — cần bổ sung Phase 1) |
+| UC-AUTH-08 | Gửi hồ sơ xác minh chủ sở hữu cá nhân | Nhà hảo tâm / Quản trị viên | 🟢 UI + backend/RLS |
 
 ### Module B — Khám phá & Tra cứu chiến dịch (`UC-DISC`)
 
@@ -751,11 +752,12 @@ flowchart LR
 
 | ID | Tên Use Case | Actor chính | Trạng thái |
 |---|---|---|---|
-| UC-CAMP-01 | Tạo chiến dịch mới (chọn loại Trực tiếp/Kết nối, gửi e-KYC) | Tổ chức từ thiện | 🟢 UI / 🔴 backend duyệt |
+| UC-CAMP-01 | Tạo chiến dịch mới (chọn loại Trực tiếp/Kết nối, gửi hồ sơ xác minh) | Tổ chức từ thiện / Nhà hảo tâm đã xác minh | 🟢 UI + backend/RLS / 🟡 Admin duyệt |
 | UC-CAMP-02 | Đăng bài cập nhật / nhật ký tiến độ chiến dịch | Tổ chức từ thiện | 🟢 (hiển thị) / 🔴 (đăng bài thật) |
 | UC-CAMP-03 | Đóng cổng chiến dịch & xem dashboard tổng kết | Tổ chức từ thiện | 🟢 |
 | UC-CAMP-04 | Xuất báo cáo CSV/PDF khi đóng cổng | Tổ chức từ thiện | 🟢 UI / 🔴 backend |
 | UC-CAMP-05 | Xuất Gói ESG ZIP khi đóng cổng | Tổ chức từ thiện | 🟢 UI / 🔴 backend |
+| UC-CAMP-06 | Chỉnh sửa và gửi duyệt chiến dịch cá nhân | Nhà hảo tâm đã xác minh | 🟢 UI + backend/RLS |
 
 ### Module G — Chữ ký người đại diện & hậu kiểm giải ngân (`UC-DISB`)
 
@@ -942,7 +944,7 @@ flowchart LR
 - **Luồng thay thế:** Chọn tab "Từ ví" → dùng số dư ví nội bộ, xác nhận ngay không cần QR (UC-DON-02). Chọn tab "Vật phẩm" → chuyển sang luồng claim wishlist (UC-RES-04).
 - **Ngoại lệ:** Hết thời gian chờ webhook / không khớp `tx_ref` → giao dịch treo ở trạng thái "pending" (cần cơ chế đối soát thủ công ở Admin Portal — hiện chưa có UI riêng cho việc này, đây là gap 🔴).
 - **Hậu điều kiện:** Giao dịch được ghi nhận vào `transactions`, Cashflow Tree công khai cập nhật realtime, người ủng hộ có biên nhận trong Kho chứng nhận (UC-ACC-05).
-- **Quy tắc nghiệp vụ:** Chiến dịch loại "Kết nối" (partner) không qua tách 90/10 — tiền chuyển thẳng đến tổ chức thụ hưởng, tổ chức chịu trách nhiệm pháp lý toàn bộ (Disclaimer mục 7 tài liệu kỹ thuật).
+- **Quy tắc nghiệp vụ đã cập nhật:** Chiến dịch loại "Kết nối" (partner) không áp dụng tách 90/10. Tiền vẫn đi qua tài khoản trung tâm VEA để đối soát, sau đó được phân bổ cho đối tác thụ hưởng theo hồ sơ được duyệt.
 
 #### UC-DON-02 — Ủng hộ từ số dư Ví nội bộ
 - Actor chính: Nhà hảo tâm. Tab "Từ ví" trong `donate-modal`: chọn mức tiền trong số dư hiển thị → "Xác nhận từ ví →" → trừ ví, ghi nhận giao dịch ngay lập tức, không qua bước quét QR ngân hàng.
@@ -1054,7 +1056,7 @@ flowchart LR
 - **Tiền điều kiện:** Đã đăng nhập với tài khoản loại Doanh nghiệp/Tổ chức.
 - **Luồng sự kiện chính:**
   1. Mở `create-campaign-modal` (nút "Tạo chiến dịch").
-  2. Chọn loại hình (`selectCampaignType`): **Trực tiếp** (quỹ tự triển khai, hệ thống tự tách 90/10 theo NĐ 93/2021) hoặc **Kết nối** (chuyển thẳng đối tác, e-receipt tự động qua Webhook).
+  2. Chọn loại hình (`selectCampaignType`): **Trực tiếp** (quỹ tự triển khai, hệ thống phân bổ 90/10) hoặc **Kết nối** (VEA tiếp nhận tập trung rồi phân bổ cho đối tác, e-receipt tự động qua Webhook).
   3. Nhập Tên chiến dịch, Mục tiêu (VND), Thời hạn, Hạng mục (Giáo dục/Y tế/Nhà ở/Lương thực/Cứu trợ khẩn cấp/Cộng đồng), Mô tả chi tiết.
   4. Bấm "Gửi hồ sơ xét duyệt →" (`submitCampaign()`).
   5. Hệ thống ghi nhận hồ sơ ở trạng thái `pending`, thông báo: đội ngũ xác thực e-KYC trong 3–5 ngày làm việc trước khi công khai.
@@ -1337,7 +1339,7 @@ Tài liệu này bao phủ:
 | Mã | Quy tắc |
 |---|---|
 | **BR-01** | Chiến dịch **Trực tiếp** tự động phân bổ 90% vào Execution Fund và 10% vào Operation Fund theo Nghị định 93/2021/NĐ-CP. Execution Fund bị khóa và chỉ giải ngân theo tiến độ xác thực. |
-| **BR-02** | Chiến dịch **Kết nối** chuyển tiền thẳng tới tài khoản đối tác thụ hưởng; nền tảng không giữ tiền giữa chặng. Đối tác chịu trách nhiệm pháp lý đối với việc sử dụng tiền. |
+| **BR-02** | Mọi khoản ủng hộ được chuyển vào tài khoản trung tâm của một công ty thành viên VEA Group. Chiến dịch **Kết nối** không tách 90/10; tiền được đối soát rồi phân bổ cho đối tác theo hồ sơ đã duyệt. |
 | **BR-03** | Mỗi yêu cầu thanh toán có mã định danh dạng `TN-YYYY-XXXXX`; nội dung này được dùng để match webhook. |
 | **BR-04** | Giao dịch chỉ chuyển sang hoàn tất khi webhook có chữ ký hợp lệ, đúng tài khoản, match được mã giao dịch và số tiền hợp lệ. |
 | **BR-05** | Khi match thành công, hệ thống cập nhật giao dịch/Cashflow Tree, phát realtime event, gửi biên nhận PDF qua email và thông báo cho người liên quan. |
@@ -1491,7 +1493,7 @@ Tài liệu này bao phủ:
 - **Actor:** A01, A02, A03, A06, đối tác truyền thông.
 - **Mục tiêu:** Hiểu sứ mệnh, cơ sở pháp lý, đội ngũ, đối tác và tài liệu giới thiệu.
 - **Trạng thái:** P0.
-- **Luồng chính:** Người dùng mở `pg-introduction`, xem sứ mệnh, cam kết không giữ tiền, dữ liệu công khai, bằng chứng thực địa, Nghị định 93/2021, Nghị định 13/2023, đối tác, so sánh nền tảng; tải Media Kit PDF hoặc mở form hợp tác UC-E06.
+- **Luồng chính:** Người dùng mở `pg-introduction`, xem sứ mệnh, cơ chế tài khoản nhận tập trung và đối soát, dữ liệu công khai, bằng chứng thực địa, quy định áp dụng, đối tác, so sánh nền tảng; tải Media Kit PDF hoặc mở form hợp tác UC-E06.
 - **Ngoại lệ:** Tài liệu chưa có → hiển thị trạng thái chưa phát hành, không tạo link giả.
 
 ### UC-P09 — Xem nhật ký, video và lan tỏa campaign
@@ -1642,7 +1644,7 @@ Tài liệu này bao phủ:
   4. Backend sinh `tx_ref` dạng `TN-YYYY-XXXXX`, lưu transaction `pending`.
   5. Backend gọi VietQR, trả QR/deep-link data; UI mở modal VietQR.
 - **Ngoại lệ:** Số tiền không hợp lệ, campaign đóng, VietQR lỗi hoặc tài khoản nhận không khớp → không lưu giao dịch hoặc đánh dấu lỗi có thể retry.
-- **Quy tắc:** Với campaign Kết nối phải hiển thị rõ tiền chuyển thẳng tới đối tác; platform không giữ tiền.
+- **Quy tắc:** Với campaign Kết nối phải hiển thị rõ tiền được VEA tiếp nhận tập trung, đối soát và phân bổ cho đối tác; không được mô tả là chuyển thẳng vào tài khoản đối tác.
 
 ### UC-D02 — Thanh toán qua VietQR/deep link ngân hàng
 
@@ -1714,7 +1716,7 @@ Tài liệu này bao phủ:
 - **Actor:** A03; A01/A02 sau khi đăng nhập có thể trở thành chủ campaign.
 - **Mục tiêu:** Đăng ký một campaign Trực tiếp hoặc Kết nối để xét duyệt.
 - **Trạng thái:** P0/P1; `POST /api/campaigns`.
-- **Tiền điều kiện:** Có session hợp lệ; tổ chức/chủ campaign có KYC `passed` theo tài liệu API. Với campaign cá nhân, policy loại tài khoản và người chịu trách nhiệm pháp lý phải được chốt.
+- **Tiền điều kiện:** Có session hợp lệ; tổ chức có `organizations.license_status = approved` hoặc nhà hảo tâm có `personal_profiles.verification_status = approved`. Campaign cá nhân dùng `owner_type = individual`, `owner_user_id = profiles.id`, không gắn `organization_id`.
 - **Luồng chính:**
   1. Người dùng chọn “Tạo chiến dịch”.
   2. Chọn loại Trực tiếp hoặc Kết nối.
@@ -2353,7 +2355,7 @@ Các điểm sau không làm thay đổi catalog trên, nhưng cần xử lý tr
 5. **Không đồng nhất state SOS:** dữ liệu UI dùng `emergency/needs/volunteer/resolved`, danh sách Admin dùng `urgent/need/done`, còn API mô tả marker `type` khác; cần một enum chuẩn và mapping.
 6. **Markup SOS có dấu hiệu lỗi:** dòng khai báo modal chứa `<div <div id="sos-report-modal"...`; cần sửa và chạy lại HTML validator.
 7. **KYC 3 lớp chưa có định nghĩa:** tài liệu nêu e-KYC 3 lớp nhưng UI hiển thị giấy phép, TKNH, CCCD và điều lệ; cần quy định rõ lớp, giấy tờ, SLA và quyền override.
-8. **Quyền và vòng đời chưa đủ:** cần chốt guest donation, campaign cá nhân, sửa/xóa campaign, refund/overpayment/unmatched transaction, hủy claim, đóng/mở SOS và xử lý số dư sau closure.
+8. **Quyền và vòng đời chưa đủ:** cần chốt guest donation, sửa/xóa campaign, refund/overpayment/unmatched transaction, hủy claim, đóng/mở SOS và xử lý số dư sau closure. Luồng campaign cá nhân đã được chốt theo hồ sơ `personal_profiles` và Admin duyệt riêng.
 9. **Wallet và recurring chưa có contract:** UI có nạp ví, ủng hộ định kỳ và tự động phân bổ nhưng schema/API/scheduler/hủy/hoàn tiền chưa được nêu.
 10. **Bằng chứng giải ngân chưa đầy đủ trong schema:** tài liệu yêu cầu biên bản nghiệm thu và danh sách ký nhận nhưng schema mới có URL hóa đơn và ảnh GPS; cần bổ sung bảng/file relationship và chữ ký số nếu bắt buộc.
 11. **Campaign content chưa có contract:** nhật ký, comment/like, video, poster/Viral Kit và SEO metadata có trong prototype nhưng chưa có bảng/API/moderation.
@@ -2882,8 +2884,8 @@ Phần này chuyển các điểm D1–D12 thành câu hỏi có thể dùng tro
 **Câu hỏi chốt cho Tech Lead:**
 
 1. Có thêm `organization_type = business | ngo | partner | rescue_organization` không?
-2. Một campaign Partner có bắt buộc có `beneficiary_organization_id` và tài khoản nhận tiền riêng không?
-3. Tài khoản nhận tiền có được thay đổi sau khi campaign active không?
+2. Một campaign Partner có bắt buộc có `beneficiary_organization_id` không? **Đã chốt phần tài khoản:** không dùng tài khoản nhận riêng của Partner; tiền đi qua tài khoản trung tâm VEA.
+3. Tài khoản nhận tiền có được thay đổi sau khi campaign active không? **Đã chốt:** chủ campaign không được chọn tài khoản; chỉ Admin quản lý tài khoản trung tâm cấp nền tảng.
 4. Doanh nghiệp có được tạo chiến dịch nhận tiền hay chỉ được tài trợ/Matching Fund?
 5. Quyền xem dữ liệu của doanh nghiệp được giới hạn theo campaign hay toàn bộ tổ chức?
 
@@ -2902,7 +2904,7 @@ Phần này chuyển các điểm D1–D12 thành câu hỏi có thể dùng tro
 3. Ai duyệt `pending_review → active`?
 4. Chiến dịch có tự động đóng khi hết hạn hoặc đạt mục tiêu không?
 5. Sau khi đóng, xử lý giao dịch pending, tiền dư và khoản chi chưa hoàn tất thế nào?
-6. Campaign đã active có được đổi tài khoản nhận tiền, người thụ hưởng hoặc loại Direct/Partner không?
+6. Campaign đã active có được đổi người thụ hưởng hoặc loại Direct/Partner không? Tài khoản nhận không thuộc campaign và do Admin VEA quản lý tập trung.
 
 **Khuyến nghị:** Ban hành state machine và transition matrix trước khi xây API.
 
@@ -2925,9 +2927,9 @@ Phần này chuyển các điểm D1–D12 thành câu hỏi có thể dùng tro
 
 ### D7. Công thức 90/10 và phân bổ Direct/Partner
 
-**Dẫn chứng:** Tài liệu quy định 90% Execution Fund và 10% Operation Fund [dòng 111](./ThienNguyen_TechSpec_v2.md:111), đồng thời có Partner chuyển tiền trực tiếp cho tổ chức thụ hưởng [dòng 266](./ThienNguyen_TechSpec_v2.md:266).
+**Dẫn chứng:** Tài liệu quy định 90% Execution Fund và 10% Operation Fund [dòng 111](./ThienNguyen_TechSpec_v2.md:111). Tech Lead đã xác nhận tiền thực tế được nhận qua tài khoản trung tâm của công ty thành viên VEA, gồm tài khoản VND và tài khoản ngoại tệ.
 
-**Vì sao cần xác nhận:** Hai mô hình này có thể dẫn tới hai cách xử lý tiền khác nhau. Nếu nền tảng không giữ tiền, hệ thống phải xác định Operation Fund được thu ở đâu. Nếu nền tảng có giữ hoặc tự phân bổ, cần có mô hình tài khoản, đối soát và trách nhiệm pháp lý tương ứng.
+**Vì sao vẫn cần xác nhận:** Mô hình tài khoản nhận đã được chốt là tập trung, nhưng công thức phân bổ, phí ngân hàng, tỷ giá và cách hạch toán hoàn tiền vẫn chưa được chốt. Đây là các dữ liệu quyết định số tiền thực tế được ghi vào Execution Fund và Operation Fund.
 
 **Câu hỏi chốt cho Tech Lead:**
 
@@ -3157,28 +3159,22 @@ Cần constraint ở database, kiểm tra quyền trong API và audit log cho to
 
 ### Câu 4. Direct và Partner khác nhau thế nào về tài khoản nhận tiền và 90/10?
 
-#### Dẫn chứng
+#### Đã giải quyết một phần theo xác nhận Tech Lead ngày 23/09/2026
 
-Tài liệu cho phép campaign có hai loại `direct` và `partner` [dòng 172](./ThienNguyen_TechSpec_v2.md:172), đồng thời quy định dòng tiền được phân bổ thành 90% Execution Fund và 10% Operation Fund [dòng 111](./ThienNguyen_TechSpec_v2.md:111). Tuy nhiên, phần Partner lại mô tả tiền được chuyển trực tiếp đến tài khoản của tổ chức thụ hưởng [dòng 266](./ThienNguyen_TechSpec_v2.md:266). Trong schema, tổ chức mới chỉ có một tài khoản ngân hàng chung [dòng 171](./ThienNguyen_TechSpec_v2.md:171), chưa có quan hệ tài khoản nhận tiền riêng theo campaign hoặc đối tượng thụ hưởng. Vì vậy, tài liệu chưa đủ cơ sở để xác định Direct và Partner được xử lý giống hay khác nhau về tài khoản nhận tiền, quyền kiểm soát và tỷ lệ 90/10.
+- Direct và Partner đều nhận tiền qua tài khoản trung tâm của một công ty thành viên VEA Group, không dùng tài khoản ngân hàng riêng của tổ chức/campaign.
+- Có hai nhánh tài khoản: VND dùng tài khoản ngân hàng Việt Nam và ngoại tệ dùng tài khoản ngân hàng quốc tế.
+- Chỉ Admin cấu hình tài khoản nhận cấp nền tảng. `tx_ref` xác định transaction, donor và campaign khi ngân hàng gửi dữ liệu xác nhận.
+- Partner không còn được mô tả là “chuyển thẳng tới tài khoản đối tác”. Sau đối soát, hệ thống mới ghi nhận việc phân bổ cho đối tác thụ hưởng.
 
-#### Vấn đề cần quyết định
+#### Phần vẫn cần Tech Lead chốt
 
-Chưa rõ nền tảng chỉ ghi nhận dòng tiền hay được phép giữ và phân bổ tiền. Hai cách hiểu này dẫn tới thiết kế tài khoản ngân hàng, webhook, Cashflow và trách nhiệm vận hành khác nhau.
+> Direct áp dụng 90/10; vậy Partner có áp dụng tỷ lệ này không, và tỷ lệ được tính trên số tiền trước hay sau phí ngân hàng/quy đổi ngoại tệ?
 
-#### Câu hỏi chốt
+Cần xác nhận thêm chủ thể sở hữu 10% Operation Fund, quy tắc tỷ giá/phí, hoàn tiền và cách hạch toán khi số tiền ngân hàng ghi có khác số tiền donor dự kiến.
 
-> Với campaign Direct và Partner, tiền được chuyển vào tài khoản nào, ai sở hữu tài khoản và 90/10 được áp dụng như thế nào?
+#### Tác động kỹ thuật đã đồng bộ
 
-Cần chọn rõ:
-
-- Direct: nền tảng nhận tiền hay tổ chức nhận tiền?
-- Partner: có tài khoản thụ hưởng riêng theo campaign không?
-- 10% Operation Fund thuộc nền tảng, tổ chức hay campaign?
-- Có cho phép thay đổi tài khoản nhận tiền sau khi campaign active không?
-
-#### Tác động kỹ thuật
-
-Quyết định ảnh hưởng đến mô hình `beneficiary_organization`, bank account mapping, allocation ledger, quyền xem giao dịch và quy trình đối soát.
+Database dùng `platform_receiving_accounts` và `bank_webhook_events`; transaction lưu snapshot tài khoản nhận, số tiền/tiền tệ dự kiến và thực nhận. Chủ campaign không còn quyền CRUD tài khoản nhận tiền.
 
 ### Câu 5. Trạng thái chính thức của campaign, transaction, disbursement và SOS là gì?
 
@@ -3743,13 +3739,16 @@ Một Admin có được đồng thời xác minh giấy phép, duyệt campaign
 | 4 | Donor | Bấm "Ủng hộ" | `openModal('donate-modal')` | — | Modal donate mở, mặc định tab Tiền mặt |
 | 5 | Donor | Chọn mức tiền (hoặc nhập tùy ý) + email nhận biên nhận → "Tiếp tục" | Tính preview phân bổ 90/10 (client) → `proceedToQR()` → production: `POST /api/vietqr/generate` | `amount`, `campaignId`, `email` | Sinh `tx_ref` (`TN-YYYY-XXXXX`), insert `transactions(status=pending)`, gọi VietQR API → trả `qrDataURL` |
 | 6 | Donor | Quét QR bằng app ngân hàng **của chính họ**, xác nhận chuyển khoản | *(Ngoài hệ thống — xảy ra trên app ngân hàng)* | — | Tiền rời khỏi tài khoản donor |
-| 7 | **Ngân hàng** (actor phụ) | Ghi nhận biến động số dư tài khoản **của Tổ chức** | Gửi `POST /api/webhook/bank-transaction` | `accountNo`, `amount`, `description`, `signature` | — |
+| 7 | **Ngân hàng** (actor phụ) | Ghi nhận biến động số dư tài khoản trung tâm VEA (VND hoặc ngoại tệ) | Gửi `POST /api/webhook/bank-transaction` | `accountNo`, `amount`, `currency`, `description`, `providerEventId`, `signature` | — |
 | 8 | Hệ thống | Đối soát webhook | Verify chữ ký → regex trích `tx_ref` từ nội dung CK → match với `transactions.tx_ref` | Webhook payload | `transactions.status = completed`, `webhook_matched_at` |
 | 9 | Hệ thống | Cập nhật Cashflow Tree + gửi biên nhận | Cộng vào Tầng 1 (Thu vào) + tính lại Tầng 2 (90/10) → gọi `sendReceiptEmail()` → broadcast realtime kênh `cashflow` | `tx` đã match | Cashflow Tree công khai cập nhật, email PDF gửi đi, UI cập nhật tức thời |
 | 10 | Donor | Mở `receipt-modal`, tải PDF hoặc gửi lại email | Xuất PDF kèm hash SHA-256 rút gọn | `txId` | File PDF biên nhận song ngữ VND/USD |
 
 ### Cần xác nhận với Tech Lead
-- **Webhook multi-tenant:** Vì tiền chuyển thẳng đến tài khoản ngân hàng của **từng tổ chức** (đã xác nhận ở lượt phân tích trước — không phải 1 tài khoản trung tâm của VEA Group), endpoint `/api/webhook/bank-transaction` phải nhận diện được **webhook đến từ tổ chức nào** để cập nhật đúng transactions của tổ chức đó. Cần xác nhận: mỗi tổ chức tự đăng ký 1 webhook secret riêng (lưu ở `organizations`), hay có 1 secret dùng chung rồi hệ thống tự suy ra tổ chức qua `accountNo` nhận tiền?
+- **Quyết định Tech Lead ngày 23/09/2026 — tài khoản nhận tập trung:** Tiền không chuyển vào tài khoản riêng của từng tổ chức. Tất cả khoản ủng hộ đi qua tài khoản của một công ty thành viên VEA Group. Hệ thống quản lý tối thiểu hai tài khoản nhận: một tài khoản nội địa cho VND và một tài khoản quốc tế cho ngoại tệ. Vì vậy `/api/webhook/bank-transaction` xác định tài khoản nhận theo cấu hình cấp nền tảng, sau đó match `tx_ref` để tìm đúng transaction, donor và campaign; không lưu webhook secret tại `organizations`.
+- **Phân quyền cấu hình:** Chỉ Admin được quản lý `platform_receiving_accounts`. Tổ chức/chủ chiến dịch không được chọn hoặc thay đổi tài khoản nhận tiền. `campaign_payment_configs` trở thành dữ liệu legacy và không còn là nguồn tạo QR.
+- **Câu hỏi tích hợp ngân hàng còn mở:** Cần ngân hàng/provider xác nhận hình thức callback hay polling, độ trễ/SLA, payload, thuật toán ký, mã sự kiện chống trùng, các loại ngoại tệ hỗ trợ, tỷ giá và phí. Chưa được coi webhook production là hoàn tất cho đến khi có đặc tả này.
+- **Thông báo donor:** Sau khi webhook hợp lệ và giao dịch được đối soát thành công, hệ thống phải gửi thông báo sớm cho donor, tối thiểu gồm số tiền, tiền tệ, campaign, mã giao dịch và thời điểm ngân hàng xác nhận. Biên nhận/ủy nhiệm chi là bằng chứng bổ sung, không thay thế bản ghi giao dịch và audit log.
 - **Cơ chế fallback khi webhook không tới:** Nếu ngân hàng lỗi/mạng chậm, giao dịch treo ở `pending` — có cần nút "Tôi đã chuyển khoản, kiểm tra lại giúp tôi" để donor tự trigger đối soát thủ công, hay bắt buộc liên hệ support?
 - **Timeout hồ sơ pending:** Sau bao lâu (15 phút? 24 giờ?) thì một giao dịch `pending` bị coi là thất bại và cần xử lý thủ công?
 - **Trùng nội dung chuyển khoản:** Nếu 2 người chuyển gần như cùng lúc với nội dung dễ nhầm (người dùng tự gõ tay thay vì dùng QR), có cơ chế chống match sai `tx_ref` không?
@@ -3918,7 +3917,17 @@ Phạm vi: mọi thứ Khách vãng lai làm được, **cộng thêm** toàn b�
 - 🟢/🔴 Xem Trung tâm thông báo, lọc theo loại, đánh dấu đã đọc — `UC-NOTI-01, 02, 03` *(lưu ý: hiện chưa có lối vào UI — xem phần Gap ở mục 10)*
 - 🔴 Đăng xuất tài khoản — `UC-AUTH-07` (chưa tồn tại trong demo)
 
-**Không được làm:** tạo chiến dịch, duyệt hồ sơ tổ chức khác, upload/duyệt giải ngân, vào Admin Portal.
+Nhà hảo tâm có thể mở **Cổng chiến dịch cá nhân** tại `/personal-campaigns`. Quyền này không được cấp ngay khi đăng ký: người dùng phải khai báo hồ sơ tại `personal_profiles`, upload giấy tờ vào bucket Storage riêng tư `personal-verification`, chờ Admin chuyển `verification_status` sang `approved`, sau đó mới được tạo bản nháp và gửi campaign qua vòng `pending_review`.
+
+**Không được làm:** duyệt hồ sơ tổ chức/cá nhân khác, upload/duyệt giải ngân, cấu hình tài khoản nhận tiền của campaign cá nhân, vào Admin Portal. Campaign cá nhân vẫn phải được Admin duyệt và kích hoạt trước khi công khai.
+
+### Mô hình dữ liệu chủ sở hữu cá nhân
+
+- `profiles.role = 'donor'` vẫn là role cấp hệ thống; không tạo thêm top-level role `personal_owner`.
+- `personal_profiles.user_id` là khóa chính liên kết 1-1 với `profiles`, lưu họ tên pháp lý, số điện thoại, trạng thái xác minh, ghi chú Admin và đường dẫn giấy tờ riêng tư.
+- `campaigns.owner_type = 'individual'`, `campaigns.owner_user_id = profiles.id`, `campaigns.organization_id = null` dùng cho campaign cá nhân. Campaign tổ chức giữ `owner_type = 'organization'` và `organization_id` như cũ.
+- RLS và RPC donation đều kiểm tra hồ sơ cá nhân đã `approved`; chỉ kiểm tra ở UI là không đủ.
+- Tài liệu định danh không được hiển thị public. Admin mở qua signed URL có thời hạn; nội dung campaign public chỉ hiển thị nhãn “Nhà hảo tâm đã xác minh”.
 
 ---
 
@@ -3944,7 +3953,7 @@ Phạm vi: mọi thứ Khách vãng lai làm được, **cộng thêm** toàn b�
 Phạm vi: chủ sở hữu 1 pháp nhân trên nền tảng, chịu trách nhiệm pháp lý về chiến dịch mình tạo.
 
 - 🟢/🔴 Đăng ký tài khoản tổ chức và upload giấy phép hoạt động — `UC-AUTH-01` (nhánh Doanh nghiệp/Tổ chức)
-- 🟢/🔴 Tạo chiến dịch mới — chọn loại Trực tiếp (tách 90/10) hoặc Kết nối (chuyển thẳng) — `UC-CAMP-01`
+- 🟢/🔴 Tạo chiến dịch mới — chọn loại Trực tiếp (phân bổ 90/10) hoặc Kết nối (VEA tiếp nhận tập trung và phân bổ cho đối tác) — `UC-CAMP-01`
 - 🟢/🔴 Đăng bài cập nhật / nhật ký tiến độ chiến dịch — `UC-CAMP-02`
 - 🟢 Đóng cổng chiến dịch & xem dashboard tổng kết — `UC-CAMP-03`
 - 🟢/🔴 Xuất báo cáo CSV/PDF khi đóng cổng — `UC-CAMP-04`

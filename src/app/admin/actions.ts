@@ -6,7 +6,7 @@ import { PROVINCES } from "@/lib/geo/provinces";
 import { RESCUE_RESOURCE_TYPES } from "@/lib/rescue/resource-types";
 import { createRescueActivationToken } from "@/lib/rescue/activation-token";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendCampaignUpdateEmail, sendRescueInvitationEmail } from "@/lib/email/notifications";
+import { sendCampaignUpdateEmail, sendDonationConfirmedEmail, sendRescueInvitationEmail } from "@/lib/email/notifications";
 import { createClient } from "@/lib/supabase/server";
 
 function assertMutationSucceeded(error: { message: string } | null, fallbackMessage: string) {
@@ -18,6 +18,135 @@ async function requireAdmin() {
 }
 
 type RescueAccountResult = { ok: true; message: string } | { ok: false; message: string };
+export type ReceivingAccountActionResult = { ok: true; message: string } | { ok: false; message: string };
+
+function optionalText(formData: FormData, key: string) {
+  const value = String(formData.get(key) ?? "").trim();
+  return value || null;
+}
+
+export type DonationReconciliationResult = { ok: true; message: string } | { ok: false; message: string };
+
+export async function confirmDonationReceived(id: string): Promise<DonationReconciliationResult> {
+  const { supabase } = await requireAdmin();
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("transactions")
+    .update({ status: "completed", completed_at: nowIso })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("tx_ref, amount_vnd, receipt_email, donor_name, campaigns(title, slug)")
+    .maybeSingle();
+
+  if (error) return { ok: false, message: error.message };
+  if (!data) return { ok: false, message: "Giao dịch không còn ở trạng thái chờ xác nhận." };
+
+  const campaign = Array.isArray(data.campaigns) ? data.campaigns[0] : data.campaigns;
+  try {
+    await sendDonationConfirmedEmail({
+      to: data.receipt_email,
+      donorName: data.donor_name ?? undefined,
+      txRef: data.tx_ref,
+      campaignTitle: campaign?.title ?? "chiến dịch",
+      amount: Number(data.amount_vnd),
+      campaignUrl: campaign?.slug
+        ? `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/campaigns/${campaign.slug}`
+        : undefined,
+    });
+  } catch (emailError) {
+    console.error("Donation confirmation email failed", { txRef: data.tx_ref, emailError });
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/account");
+  if (campaign?.slug) revalidatePath(`/campaigns/${campaign.slug}`);
+  return { ok: true, message: `Đã xác nhận giao dịch ${data.tx_ref}.` };
+}
+
+export async function markDonationNeedsReview(id: string, formData: FormData): Promise<DonationReconciliationResult> {
+  const { supabase } = await requireAdmin();
+  const note = String(formData.get("note") ?? "").trim();
+  if (!note) return { ok: false, message: "Cần nhập lý do để tổ chức/donor biết vì sao chưa xác nhận được." };
+
+  const { data, error } = await supabase
+    .from("transactions")
+    .update({ status: "needs_review", failure_reason: note })
+    .eq("id", id)
+    .eq("status", "pending")
+    .select("tx_ref")
+    .maybeSingle();
+
+  if (error) return { ok: false, message: error.message };
+  if (!data) return { ok: false, message: "Giao dịch không còn ở trạng thái chờ xác nhận." };
+
+  revalidatePath("/admin");
+  revalidatePath("/account");
+  return { ok: true, message: `Đã đánh dấu giao dịch ${data.tx_ref} cần xem lại.` };
+}
+
+export async function upsertPlatformReceivingAccount(formData: FormData): Promise<ReceivingAccountActionResult> {
+  const { supabase, user } = await requireAdmin();
+  const id = optionalText(formData, "id");
+  const kind = String(formData.get("kind") ?? "").trim();
+  const currency = String(formData.get("currency") ?? "").trim().toUpperCase();
+  const provider = String(formData.get("provider") ?? "").trim();
+  const bankId = optionalText(formData, "bankId");
+  const bankName = String(formData.get("bankName") ?? "").trim();
+  const accountNo = String(formData.get("accountNo") ?? "").trim();
+  const accountName = String(formData.get("accountName") ?? "").trim();
+  const swiftCode = optionalText(formData, "swiftCode")?.toUpperCase() ?? null;
+  const iban = optionalText(formData, "iban")?.replace(/\s+/g, "").toUpperCase() ?? null;
+  const qrImageUrl = optionalText(formData, "qrImageUrl");
+  const descriptionTemplate = String(formData.get("descriptionTemplate") ?? "Ung ho {tx_ref}").trim();
+  const isActive = formData.get("isActive") === "on";
+
+  if (!['domestic_vnd', 'international'].includes(kind)) return { ok: false, message: "Loại tài khoản nhận không hợp lệ." };
+  if (!/^[A-Z]{3}$/.test(currency)) return { ok: false, message: "Mã tiền tệ phải gồm 3 chữ cái, ví dụ VND hoặc USD." };
+  if (kind === "domestic_vnd" && (currency !== "VND" || !bankId)) return { ok: false, message: "Tài khoản nội địa bắt buộc dùng VND và có mã ngân hàng VietQR." };
+  if (provider.length < 2 || provider.length > 80) return { ok: false, message: "Tên nhà cung cấp chưa hợp lệ." };
+  if (bankName.length < 2 || bankName.length > 160) return { ok: false, message: "Tên ngân hàng chưa hợp lệ." };
+  if (accountNo.length < 4 || accountNo.length > 80) return { ok: false, message: "Số tài khoản chưa hợp lệ." };
+  if (accountName.length < 2 || accountName.length > 160) return { ok: false, message: "Tên chủ tài khoản chưa hợp lệ." };
+  if (!descriptionTemplate.includes("{tx_ref}") || descriptionTemplate.length > 120) return { ok: false, message: "Nội dung chuyển khoản phải chứa {tx_ref} và không quá 120 ký tự." };
+  if (qrImageUrl) {
+    try {
+      if (new URL(qrImageUrl).protocol !== "https:") throw new Error();
+    } catch {
+      return { ok: false, message: "URL ảnh QR phải là địa chỉ HTTPS hợp lệ." };
+    }
+  }
+
+  const payload = {
+    kind,
+    currency,
+    provider,
+    bank_id: bankId,
+    bank_name: bankName,
+    account_no: accountNo,
+    account_name: accountName,
+    swift_code: swiftCode,
+    iban,
+    qr_image_url: qrImageUrl,
+    transfer_description_template: descriptionTemplate,
+    is_active: isActive,
+    updated_by: user.id,
+  };
+
+  const result = id
+    ? await supabase.from("platform_receiving_accounts").update(payload).eq("id", id)
+    : await supabase.from("platform_receiving_accounts").insert({ ...payload, created_by: user.id });
+
+  if (result.error) {
+    console.error("Failed to save platform receiving account", result.error);
+    if (result.error.code === "23505") return { ok: false, message: `Đã có một tài khoản ${currency} đang hoạt động. Hãy tắt tài khoản cũ trước.` };
+    return { ok: false, message: "Không thể lưu tài khoản nhận tiền trung tâm." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/campaigns");
+  return { ok: true, message: "Đã lưu tài khoản nhận tiền trung tâm." };
+}
 
 type RescueInvitationDeletionRow = {
   id: string;
@@ -119,17 +248,32 @@ async function rollbackRescueAccount(
 
 async function notifyCampaignOwner(
   supabase: ReturnType<typeof createClient>,
-  campaign: { id: string; title: string; organization_id: string },
+  campaign: { id: string; title: string; organization_id: string | null; owner_type?: string | null; owner_user_id?: string | null },
   status: string,
   statusLabel: string,
   note?: string | null,
 ) {
-  const { data: organization } = await supabase
-    .from("organizations")
-    .select("legal_representative_email")
-    .eq("id", campaign.organization_id)
-    .maybeSingle();
-  const recipient = organization?.legal_representative_email?.trim();
+  let recipient: string | undefined;
+  let campaignUrl = `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/organization/campaigns/${campaign.id}`;
+
+  if (campaign.owner_type === "individual" && campaign.owner_user_id) {
+    campaignUrl = `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/personal-campaigns`;
+    try {
+      const adminSupabase = createAdminClient();
+      const { data: authUser } = await adminSupabase.auth.admin.getUserById(campaign.owner_user_id);
+      recipient = authUser.user?.email?.trim();
+    } catch (error) {
+      console.warn("Could not resolve personal campaign owner email", { campaignId: campaign.id, error });
+    }
+  } else if (campaign.organization_id) {
+    const { data: organization } = await supabase
+      .from("organizations")
+      .select("legal_representative_email")
+      .eq("id", campaign.organization_id)
+      .maybeSingle();
+    recipient = organization?.legal_representative_email?.trim();
+  }
+
   if (!recipient) return;
 
   try {
@@ -140,7 +284,7 @@ async function notifyCampaignOwner(
       status,
       statusLabel,
       note,
-      campaignUrl: `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/organization/campaigns/${campaign.id}`,
+      campaignUrl,
     });
   } catch (error) {
     console.error("Campaign update email failed", { campaignId: campaign.id, status, error });
@@ -154,7 +298,7 @@ export async function approveCampaign(id: string) {
     .update({ status: "approved", reviewed_at: new Date().toISOString(), reviewed_by: user.id, review_note: null })
     .eq("id", id)
     .eq("status", "pending_review")
-    .select("id, title, organization_id")
+    .select("id, title, organization_id, owner_type, owner_user_id")
     .maybeSingle();
   assertMutationSucceeded(error, "Không thể duyệt chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
@@ -172,7 +316,7 @@ export async function requestCampaignRevision(id: string, formData: FormData) {
     .update({ status: "needs_revision", reviewed_at: new Date().toISOString(), reviewed_by: user.id, review_note: note })
     .eq("id", id)
     .eq("status", "pending_review")
-    .select("id, title, organization_id")
+    .select("id, title, organization_id, owner_type, owner_user_id")
     .maybeSingle();
   assertMutationSucceeded(error, "Không thể yêu cầu bổ sung chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
@@ -190,7 +334,7 @@ export async function rejectCampaign(id: string, formData: FormData) {
     .update({ status: "rejected", reviewed_at: new Date().toISOString(), reviewed_by: user.id, review_note: note })
     .eq("id", id)
     .eq("status", "pending_review")
-    .select("id, title, organization_id")
+    .select("id, title, organization_id, owner_type, owner_user_id")
     .maybeSingle();
   assertMutationSucceeded(error, "Không thể từ chối chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
@@ -206,7 +350,7 @@ export async function activateCampaign(id: string) {
     .update({ status: "active", published_at: new Date().toISOString() })
     .eq("id", id)
     .eq("status", "approved")
-    .select("id, title, organization_id")
+    .select("id, title, organization_id, owner_type, owner_user_id")
     .maybeSingle();
   assertMutationSucceeded(error, "Không thể kích hoạt chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái đã duyệt.");
@@ -223,7 +367,7 @@ export async function closeCampaign(id: string) {
     .update({ status: "closed" })
     .eq("id", id)
     .eq("status", "active")
-    .select("id, title, organization_id")
+    .select("id, title, organization_id, owner_type, owner_user_id")
     .maybeSingle();
   assertMutationSucceeded(error, "Không thể đóng chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái hoạt động.");
@@ -263,6 +407,55 @@ export async function rejectOrganization(id: string, formData: FormData) {
     .eq("id", id);
   assertMutationSucceeded(error, "Không thể từ chối giấy phép tổ chức.");
   revalidatePath("/admin");
+}
+
+export async function approvePersonalVerification(userId: string) {
+  const { supabase, user } = await requireAdmin();
+  const { data, error } = await supabase
+    .from("personal_profiles")
+    .update({ verification_status: "approved", verified_at: new Date().toISOString(), verified_by: user.id, verification_note: null })
+    .eq("user_id", userId)
+    .in("verification_status", ["pending", "needs_revision"])
+    .select("user_id")
+    .maybeSingle();
+  assertMutationSucceeded(error, "Không thể xác minh hồ sơ cá nhân.");
+  if (!data) throw new Error("Hồ sơ cá nhân không còn ở trạng thái chờ xác minh.");
+  revalidatePath("/admin");
+  revalidatePath("/personal-campaigns");
+}
+
+export async function requestPersonalVerificationRevision(userId: string, formData: FormData) {
+  const { supabase, user } = await requireAdmin();
+  const note = String(formData.get("note") ?? "").trim();
+  if (!note) throw new Error("Cần nhập lý do yêu cầu bổ sung hồ sơ cá nhân.");
+  const { data, error } = await supabase
+    .from("personal_profiles")
+    .update({ verification_status: "needs_revision", verified_at: null, verified_by: user.id, verification_note: note })
+    .eq("user_id", userId)
+    .eq("verification_status", "pending")
+    .select("user_id")
+    .maybeSingle();
+  assertMutationSucceeded(error, "Không thể yêu cầu bổ sung hồ sơ cá nhân.");
+  if (!data) throw new Error("Hồ sơ cá nhân không còn ở trạng thái chờ xác minh.");
+  revalidatePath("/admin");
+  revalidatePath("/personal-campaigns");
+}
+
+export async function rejectPersonalVerification(userId: string, formData: FormData) {
+  const { supabase, user } = await requireAdmin();
+  const note = String(formData.get("note") ?? "").trim();
+  if (!note) throw new Error("Cần nhập lý do từ chối hồ sơ cá nhân.");
+  const { data, error } = await supabase
+    .from("personal_profiles")
+    .update({ verification_status: "rejected", verified_at: null, verified_by: user.id, verification_note: note })
+    .eq("user_id", userId)
+    .eq("verification_status", "pending")
+    .select("user_id")
+    .maybeSingle();
+  assertMutationSucceeded(error, "Không thể từ chối hồ sơ cá nhân.");
+  if (!data) throw new Error("Hồ sơ cá nhân không còn ở trạng thái chờ xác minh.");
+  revalidatePath("/admin");
+  revalidatePath("/personal-campaigns");
 }
 
 export async function postAuditDisbursement(id: string, result: "valid" | "needs_explanation" | "violation", formData: FormData) {

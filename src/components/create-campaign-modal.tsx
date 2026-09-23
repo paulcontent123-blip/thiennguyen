@@ -4,17 +4,31 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { createOrganizationCampaign } from "@/app/organization/actions";
+import type { OrganizationActionResult } from "@/app/organization/actions";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
 import { PROVINCES } from "@/lib/geo/provinces";
 
 type CampaignType = "direct" | "partner";
+type CreateCampaignAction = (formData: FormData) => Promise<OrganizationActionResult>;
 
 const typeOptions: { value: CampaignType; icon: string; name: string; desc: string }[] = [
   { value: "direct", icon: "\u{1F3E6}", name: "Trực tiếp", desc: "Quỹ tự triển khai. Hệ thống tự tách 90/10 theo NĐ 93/2021." },
-  { value: "partner", icon: "\u{1F517}", name: "Kết nối", desc: "Chuyển thẳng đến đối tác. E-Receipt tự động qua Webhook." },
+  { value: "partner", icon: "\u{1F517}", name: "Kết nối", desc: "VEA tiếp nhận và phân bổ cho đối tác theo hồ sơ duyệt. E-Receipt tự động qua Webhook." },
 ];
 
-export function CreateCampaignModal({ disabled = false, disabledReason }: { disabled?: boolean; disabledReason?: string }) {
+export function CreateCampaignModal({
+  disabled = false,
+  disabledReason,
+  createAction = createOrganizationCampaign,
+  successMessage = "Đã tạo bản nháp. Bạn có thể gửi chiến dịch xét duyệt trong cổng quản lý.",
+  reviewNote = "Sau khi gửi, Admin sẽ kiểm tra hồ sơ và nội dung chiến dịch trước khi công khai.",
+}: {
+  disabled?: boolean;
+  disabledReason?: string;
+  createAction?: CreateCampaignAction;
+  successMessage?: string;
+  reviewNote?: string;
+}) {
   const router = useRouter();
 
   const [mounted, setMounted] = useState(false);
@@ -38,7 +52,7 @@ export function CreateCampaignModal({ disabled = false, disabledReason }: { disa
     setError(null);
     formData.set("campaignType", type);
     try {
-      const result = await createOrganizationCampaign(formData);
+      const result = await createAction(formData);
       if (!result.ok) {
         setError(result.message);
         return;
@@ -87,7 +101,7 @@ export function CreateCampaignModal({ disabled = false, disabledReason }: { disa
 
                 {success ? (
                   <div className="mt-6 rounded-[8px] bg-lua/10 p-4 text-sm text-lua">
-                    Đã tạo bản nháp. Bạn có thể gửi chiến dịch xét duyệt trong Cổng tổ chức.
+                    {successMessage}
                     <button type="button" onClick={close} className="button-primary mt-4 w-full">
                       Đóng
                     </button>
@@ -174,10 +188,7 @@ export function CreateCampaignModal({ disabled = false, disabledReason }: { disa
                       />
                     </label>
 
-                    <p className="rounded-[8px] bg-paper p-3 text-xs leading-5 text-inkMid">
-                      Sau khi gửi, Admin sẽ kiểm tra giấy phép hoạt động của tổ chức trong vòng 3–5 ngày làm việc trước khi chiến dịch được
-                      công khai.
-                    </p>
+                    <p className="rounded-[8px] bg-paper p-3 text-xs leading-5 text-inkMid">{reviewNote}</p>
 
                     <button className="button-primary w-full" type="submit" disabled={loading}>
                       {loading ? "Đang gửi…" : "Gửi hồ sơ xét duyệt →"}

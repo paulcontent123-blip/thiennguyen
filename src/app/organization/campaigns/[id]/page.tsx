@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { CampaignContentManager } from "@/components/organization/campaign-content-manager";
 import { SiteHeader } from "@/components/site-header";
 import { requirePageRole } from "@/lib/auth/server";
-import type { CampaignMedia, CampaignPaymentConfig, CampaignSeo, CampaignShareSettings, CampaignUpdate } from "@/lib/campaigns/content";
+import type { CampaignMedia, CampaignSeo, CampaignShareSettings, CampaignUpdate } from "@/lib/campaigns/content";
 
 type Campaign = {
   id: string;
@@ -142,7 +142,6 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
     { data: disbursements, error: disbursementError },
     { data: media, error: mediaError },
     { data: updates, error: updatesError },
-    { data: paymentConfig, error: paymentError },
     { data: seo, error: seoError },
     { data: shareSettings, error: shareError },
     { data: transactions, error: transactionError },
@@ -169,11 +168,6 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
       .eq("campaign_id", campaign.id)
       .order("event_at", { ascending: false }),
     supabase
-      .from("campaign_payment_configs")
-      .select("campaign_id, provider, bank_id, account_no, account_name, description_template, is_active, created_at, updated_at")
-      .eq("campaign_id", campaign.id)
-      .maybeSingle(),
-    supabase
       .from("campaign_seo")
       .select("campaign_id, meta_title, meta_description, canonical_url, schema_type, schema_json, is_public, created_at, updated_at")
       .eq("campaign_id", campaign.id)
@@ -195,7 +189,6 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
   if (disbursementError) throw new Error(disbursementError.message);
   if (mediaError) throw new Error(mediaError.message);
   if (updatesError) throw new Error(updatesError.message);
-  if (paymentError) throw new Error(paymentError.message);
   if (seoError) throw new Error(seoError.message);
   if (shareError) throw new Error(shareError.message);
   if (transactionError) console.warn("Organization transaction list is unavailable", { campaignId: campaign.id, code: transactionError.code });
@@ -205,7 +198,6 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
   const typedDisbursements = (disbursements ?? []) as Disbursement[];
   const typedMedia = (media ?? []) as CampaignMedia[];
   const typedUpdates = (updates ?? []) as CampaignUpdate[];
-  const typedPaymentConfig = (paymentConfig ?? null) as CampaignPaymentConfig | null;
   const typedSeo = (seo ?? null) as CampaignSeo | null;
   const typedShareSettings = (shareSettings ?? null) as CampaignShareSettings | null;
   const typedTransactions = (transactions ?? []) as DonationTransaction[];
@@ -365,7 +357,6 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
           campaignId={typedCampaign.id}
           media={typedMedia}
           updates={typedUpdates}
-          paymentConfig={typedPaymentConfig}
           seo={typedSeo}
           shareSettings={typedShareSettings}
         />

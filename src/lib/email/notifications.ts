@@ -23,6 +23,15 @@ type DonationReceiptEmailInput = {
   filename?: string;
 };
 
+type DonationConfirmedEmailInput = {
+  to: string;
+  donorName?: string;
+  txRef: string;
+  campaignTitle: string;
+  amount: number;
+  campaignUrl?: string;
+};
+
 type RescueInvitationEmailInput = {
   to: string;
   recipientName: string;
@@ -74,6 +83,23 @@ export function sendDonationReceiptEmail(input: DonationReceiptEmailInput): Prom
     html: `<p>Xin chào ${donorName},</p><p>Cảm ơn bạn đã ủng hộ chiến dịch <strong>${campaignTitle}</strong> với số tiền <strong>${amount}đ</strong>.</p><p>Biên nhận PDF được đính kèm email này.</p>`,
     attachments: [{ filename, content: input.pdf, contentType: "application/pdf" }],
     idempotencyKey: `donation-receipt:${input.donationId}`,
+  });
+}
+
+export function sendDonationConfirmedEmail(input: DonationConfirmedEmailInput): Promise<EmailSendResult> {
+  const donorName = input.donorName ? escapeHtml(input.donorName) : "bạn";
+  const campaignTitle = escapeHtml(input.campaignTitle);
+  const amount = new Intl.NumberFormat("vi-VN").format(input.amount);
+  const txRef = escapeHtml(input.txRef);
+  const campaignUrl = input.campaignUrl ? escapeHtml(input.campaignUrl) : "";
+  const urlHtml = input.campaignUrl ? `<p><a href="${campaignUrl}">Xem chiến dịch</a></p>` : "";
+
+  return getEmailProvider().send({
+    to: input.to,
+    subject: `Đã xác nhận ủng hộ ${amount}đ — ${input.campaignTitle}`,
+    text: `Xin chào ${input.donorName || "bạn"}, Admin đã đối soát và xác nhận giao dịch ${input.txRef} (${amount}đ) ủng hộ chiến dịch "${input.campaignTitle}" thành công. Cảm ơn tấm lòng của bạn!`,
+    html: `<p>Xin chào ${donorName},</p><p>Admin đã đối soát và xác nhận giao dịch <strong>${txRef}</strong> (<strong>${amount}đ</strong>) ủng hộ chiến dịch <strong>${campaignTitle}</strong> thành công.</p><p>Cảm ơn tấm lòng của bạn!</p>${urlHtml}`,
+    idempotencyKey: `donation-confirmed:${input.txRef}`,
   });
 }
 

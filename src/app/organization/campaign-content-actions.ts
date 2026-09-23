@@ -56,10 +56,10 @@ function detectProvider(value: string) {
 }
 
 async function requireCampaignManager(campaignId: string) {
-  const { supabase, user, role } = await requireActionRole(["org", "admin"]);
+  const { supabase, user, role } = await requireActionRole(["donor", "org", "admin"]);
   const { data: campaign, error } = await supabase
     .from("campaigns")
-    .select("id, organization_id, slug, title, description, created_at")
+    .select("id, organization_id, owner_type, owner_user_id, slug, title, description, status, created_at")
     .eq("id", campaignId)
     .maybeSingle();
 
@@ -75,6 +75,16 @@ async function requireCampaignManager(campaignId: string) {
     if (organizationError || !organization) throw new Error("Bạn không có quyền quản lý chiến dịch này.");
   }
 
+  if (role === "donor" && (campaign.owner_type !== "individual" || campaign.owner_user_id !== user.id)) {
+    throw new Error("Bạn không có quyền quản lý chiến dịch này.");
+  }
+
+  if (role !== "admin" && ["pending_review", "rejected"].includes(campaign.status)) {
+    throw new Error(campaign.status === "pending_review"
+      ? "Chiến dịch đang được Admin xét duyệt nên nội dung tạm thời bị khóa."
+      : "Chiến dịch đã bị từ chối nên không thể cập nhật nội dung công khai.");
+  }
+
   return { supabase, user, role, campaign };
 }
 
@@ -82,6 +92,9 @@ function refreshCampaignContent(campaign: { id: string; slug: string }) {
   revalidatePath(`/campaigns/${campaign.slug}`);
   revalidatePath(`/organization/campaigns/${campaign.id}`);
   revalidatePath("/organization");
+  revalidatePath(`/campaign-management/${campaign.id}`);
+  revalidatePath("/personal-campaigns");
+  revalidatePath("/admin");
 }
 
 export async function upsertCampaignMedia(formData: FormData): Promise<CampaignContentActionResult> {
@@ -316,44 +329,6 @@ export async function deleteCampaignUpdate(id: string): Promise<CampaignContentA
   if (error) return { ok: false, message: error.message };
   refreshCampaignContent(campaign);
   return { ok: true, message: "Đã xóa nhật ký thực địa." };
-}
-
-export async function upsertCampaignPaymentConfig(formData: FormData): Promise<CampaignContentActionResult> {
-  const campaignId = text(formData, "campaignId");
-  const bankId = text(formData, "bankId");
-  const accountNo = text(formData, "accountNo");
-  const accountName = text(formData, "accountName");
-  const descriptionTemplate = text(formData, "descriptionTemplate") || "TN-{campaign_slug}";
-  const isActive = booleanValue(formData, "isActive");
-
-  if (!/^[a-zA-Z0-9._-]{2,40}$/.test(bankId)) return { ok: false, message: "Mã ngân hàng VietQR không hợp lệ." };
-  if (!/^[0-9]{4,40}$/.test(accountNo)) return { ok: false, message: "Số tài khoản chỉ được chứa chữ số." };
-  if (accountName.length < 2 || accountName.length > 160) return { ok: false, message: "Tên tài khoản chưa hợp lệ." };
-  if (descriptionTemplate.length > 120) return { ok: false, message: "Mẫu nội dung chuyển khoản quá dài." };
-
-  const { supabase, user, campaign } = await requireCampaignManager(campaignId);
-  const { error } = await supabase.from("campaign_payment_configs").upsert({
-    campaign_id: campaign.id,
-    provider: "vietqr",
-    bank_id: bankId,
-    account_no: accountNo,
-    account_name: accountName,
-    description_template: descriptionTemplate,
-    is_active: isActive,
-    created_by: user.id,
-    updated_by: user.id,
-  }, { onConflict: "campaign_id" });
-  if (error) return { ok: false, message: error.message };
-  refreshCampaignContent(campaign);
-  return { ok: true, message: "Đã lưu cấu hình VietQR." };
-}
-
-export async function deleteCampaignPaymentConfig(campaignId: string): Promise<CampaignContentActionResult> {
-  const { supabase, campaign } = await requireCampaignManager(campaignId);
-  const { error } = await supabase.from("campaign_payment_configs").delete().eq("campaign_id", campaign.id);
-  if (error) return { ok: false, message: error.message };
-  refreshCampaignContent(campaign);
-  return { ok: true, message: "Đã xóa cấu hình VietQR." };
 }
 
 export async function upsertCampaignSeo(formData: FormData): Promise<CampaignContentActionResult> {

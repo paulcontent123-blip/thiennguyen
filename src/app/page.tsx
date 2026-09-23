@@ -10,7 +10,7 @@ async function getActiveCampaigns(): Promise<CampaignCardData[]> {
   const supabase = createClient();
   const { data } = await supabase
     .from("campaigns")
-    .select("slug, title, summary, target_amount")
+    .select("slug, title, summary, target_amount, category, owner_type")
     .eq("status", "active")
     .order("published_at", { ascending: false })
     .limit(8);
@@ -20,6 +20,8 @@ async function getActiveCampaigns(): Promise<CampaignCardData[]> {
     title: row.title,
     summary: row.summary,
     targetAmount: Number(row.target_amount),
+    category: row.category,
+    ownerType: row.owner_type,
   }));
 }
 
@@ -38,7 +40,22 @@ const stats = [
   ["Chiến dịch", "0", "bg-son"],
   ["Thành viên", "0", "bg-lua"],
   ["Lượt ủng hộ", "0", "bg-nghe"],
-  ["Số tiền (tỷ)", "0", "bg-skySoft"],
+  ["Số tiền (tỷ)", "0", "bg-sky"],
+] as const;
+
+const networkNodes = [
+  { icon: "🏫", kind: "org", top: "9%", left: "54%", label: "Tổ chức giáo dục" },
+  { icon: "👤", kind: "person", top: "18%", left: "18%", label: "Nhà hảo tâm" },
+  { icon: "🏥", kind: "org", top: "58%", left: "6%", label: "Tổ chức y tế" },
+  { icon: "👤", kind: "person", top: "74%", left: "36%", label: "Tình nguyện viên" },
+  { icon: "🏫", kind: "org", top: "68%", left: "66%", label: "Tổ chức cộng đồng" },
+  { icon: "👤", kind: "person", top: "14%", left: "70%", label: "Thành viên" },
+] as const;
+
+const networkDots = [
+  { top: "40%", left: "2%", color: "bg-nghe" },
+  { top: "4%", left: "38%", color: "bg-sky" },
+  { top: "84%", left: "54%", color: "bg-lua" },
 ] as const;
 
 const howSteps = [
@@ -51,6 +68,9 @@ export default async function HomePage() {
   const campaigns = await getActiveCampaigns();
   const [heroMain, ...heroRest] = campaigns;
   const heroSub = heroRest.slice(0, 2);
+  const personalCampaigns = campaigns
+    .filter((campaign) => campaign.ownerType === "individual")
+    .slice(0, 4);
 
   return (
     <main>
@@ -104,24 +124,52 @@ export default async function HomePage() {
       </section>
 
       {/* STATS NETWORK */}
-      <section className="mt-10 bg-paperMid py-14">
+      <section className="mt-10 bg-paperMid">
         <div className="mx-auto max-w-[1160px] px-7">
-          <h2 className="max-w-xl font-serif text-2xl font-semibold leading-snug text-chamDeep">
-            Đồng hành cùng cộng đồng
-            <br />
-            thiện nguyện minh bạch từ năm 2021
-          </h2>
-          <p className="mt-2 text-xs text-inkSoft">*Số liệu sẽ nối vào bảng thống kê thật ở đợt tiếp theo — hiện đang là 0.</p>
-          <div className="mt-6 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
-            {stats.map(([label, value, dot]) => (
-              <div key={label}>
-                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-inkSoft">
-                  <span className={`h-2 w-2 rounded-full ${dot}`} />
-                  {label}
-                </div>
-                <div className="mt-1 font-mono text-2xl font-bold text-chamDeep">{value}</div>
+          <div className="flex flex-col items-center gap-7 py-[52px] lg:flex-row lg:gap-14">
+            <div className="relative h-[260px] w-[260px] shrink-0 sm:h-[360px] sm:w-[360px]" aria-label="Mạng lưới cộng đồng thiện nguyện" role="img">
+              <span className="absolute left-1/2 top-1/2 h-[108px] w-[108px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-line sm:h-[150px] sm:w-[150px]" />
+              <span className="absolute left-1/2 top-1/2 h-[190px] w-[190px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-line sm:h-[264px] sm:w-[264px]" />
+              <span className="absolute left-1/2 top-1/2 h-[256px] w-[256px] -translate-x-1/2 -translate-y-1/2 rounded-full border border-dashed border-line sm:h-[356px] sm:w-[356px]" />
+
+              <span className="absolute left-1/2 top-1/2 z-10 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-gradient-to-br from-son to-[#D4514A] text-[28px] text-white shadow-[0_0_0_11px_rgba(168,52,43,0.10),0_0_0_22px_rgba(168,52,43,0.05)] sm:h-[76px] sm:w-[76px] sm:text-[32px] sm:shadow-[0_0_0_14px_rgba(168,52,43,0.10),0_0_0_28px_rgba(168,52,43,0.05)]" aria-hidden="true">♥</span>
+
+              {networkNodes.map((node) => (
+                <span
+                  key={`${node.label}-${node.top}-${node.left}`}
+                  title={node.label}
+                  className={`absolute z-20 flex h-[34px] w-[34px] items-center justify-center rounded-full bg-white text-sm shadow-card sm:h-[38px] sm:w-[38px] sm:text-[15px] ${node.kind === "org" ? "border-2 border-sky" : "border-2 border-nghe"}`}
+                  style={{ top: node.top, left: node.left }}
+                  aria-hidden="true"
+                >
+                  {node.icon}
+                </span>
+              ))}
+
+              {networkDots.map((dot) => (
+                <span key={`${dot.top}-${dot.left}`} className={`absolute h-2.5 w-2.5 rounded-full ${dot.color}`} style={{ top: dot.top, left: dot.left }} aria-hidden="true" />
+              ))}
+            </div>
+
+            <div className="w-full flex-1">
+              <h2 className="font-serif text-[27px] font-medium leading-[1.32] text-chamDeep sm:text-[30px]">
+                Đồng hành cùng cộng đồng
+                <br />
+                thiện nguyện minh bạch từ năm 2021
+              </h2>
+              <div className="mt-7 grid grid-cols-2 gap-x-5 gap-y-6 sm:grid-cols-3">
+                {stats.map(([label, value, dot]) => (
+                  <div key={label}>
+                    <div className="mb-1 flex items-center gap-1.5 text-xs text-inkSoft">
+                      <span className={`h-2 w-2 shrink-0 rounded-full ${dot}`} />
+                      {label}
+                    </div>
+                    <div className="font-mono text-[22px] font-bold leading-tight text-chamDeep">{value}</div>
+                  </div>
+                ))}
               </div>
-            ))}
+              <p className="mt-7 text-xs text-inkSoft">Số liệu sẽ tự động cập nhật khi dữ liệu thống kê chính thức được đồng bộ.</p>
+            </div>
           </div>
         </div>
       </section>
@@ -168,48 +216,97 @@ export default async function HomePage() {
         )}
       </section>
 
-      {/* 2 LOẠI HÌNH CHIẾN DỊCH */}
+      {/* PERSONAL CAMPAIGNS */}
       <section className="bg-paperMid py-14">
         <div className="mx-auto max-w-[1160px] px-7">
-          <div className="mb-8 text-center">
-            <p className="eyebrow">2 loại hình chiến dịch</p>
-            <h2 className="mt-1 font-serif text-2xl font-semibold text-chamDeep">Dòng tiền minh bạch — Phù hợp mọi mục đích</h2>
-          </div>
-          <div className="mx-auto grid max-w-2xl gap-4 sm:grid-cols-2">
-            <div className="panel">
-              <div className="text-3xl">&#127974;</div>
-              <h3 className="mt-2 font-serif text-lg font-semibold text-chamDeep">Chiến dịch Trực tiếp</h3>
-              <p className="mt-1 text-sm leading-6 text-inkMid">
-                Quỹ tự triển khai. Hệ thống tự động tách 90/10 theo Nghị định 93/2021/NĐ-CP.
-              </p>
-              <div className="mt-4 flex h-2 overflow-hidden rounded-full">
-                <div className="w-[90%] bg-lua" />
-                <div className="w-[10%] bg-nghe" />
-              </div>
-              <div className="mt-2 flex justify-between text-xs font-bold">
-                <span className="text-lua">90% Thực thi</span>
-                <span className="text-ngheDeep">10% Vận hành</span>
-              </div>
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="eyebrow">Chiến dịch của Cá nhân</p>
+              <h2 className="mt-1 font-serif text-2xl font-semibold text-chamDeep">Ai cũng có thể tạo chiến dịch</h2>
             </div>
-            <div className="panel">
-              <div className="text-3xl">&#128279;</div>
-              <h3 className="mt-2 font-serif text-lg font-semibold text-chamDeep">Chiến dịch Kết nối</h3>
-              <p className="mt-1 text-sm leading-6 text-inkMid">
-                Chuyển thẳng đến đối tác (Bệnh viện, Quỹ). Nền tảng xác nhận qua Webhook &amp; xuất E-Receipt tự động.
-              </p>
-              <div className="mt-4 flex flex-col gap-1.5 text-[13px] text-lua">
-                <span>&#10003; Không qua tài khoản trung gian</span>
-                <span>&#10003; E-Receipt tự động qua email</span>
-              </div>
-            </div>
+            <Link href="/campaigns?owner=individual" className="text-sm font-bold text-son">Xem tất cả &rarr;</Link>
           </div>
 
-          <div className="mt-12 grid gap-8 sm:grid-cols-3">
+          {personalCampaigns.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              {personalCampaigns.map((campaign) => (
+                <CampaignCard key={campaign.slug} campaign={campaign} />
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-[14px] border border-dashed border-lineStrong bg-paper p-8 text-center">
+              <div className="text-3xl" aria-hidden="true">👤</div>
+              <p className="mt-3 font-serif text-lg font-semibold text-chamDeep">Chưa có chiến dịch cá nhân</p>
+              <p className="mx-auto mt-1.5 max-w-2xl text-sm leading-6 text-inkMid">
+                Chiến dịch cá nhân chỉ hiển thị sau khi chủ sở hữu được xác minh và Admin phê duyệt chiến dịch.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* HOW + 2 CAMPAIGN TYPES */}
+      <section className="bg-paper py-14">
+        <div className="mx-auto max-w-[1160px] px-7">
+          <div className="mb-3.5">
+            <p className="eyebrow">2 loại hình chiến dịch</p>
+            <h2 className="mt-1 font-serif text-2xl font-semibold text-chamDeep">
+              Dòng tiền minh bạch — Phù hợp mọi mục đích
+            </h2>
+          </div>
+
+          <div className="mx-auto mb-9 grid max-w-[680px] gap-4 sm:grid-cols-2">
+            <Link
+              href="/campaigns?type=direct"
+              className="rounded-[14px] border-2 border-son bg-sonMid p-[22px] transition duration-200 hover:-translate-y-0.5 hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-son"
+            >
+              <div className="mb-2.5 text-[28px] leading-none" aria-hidden="true">
+                &#127974;
+              </div>
+              <h3 className="mb-1 text-[15px] font-bold text-chamDeep">Chiến dịch Trực tiếp</h3>
+              <p className="text-[13px] leading-[1.6] text-inkMid">
+                Quỹ tự triển khai. Hệ thống tự động tách 90/10 theo Nghị định 93/2021/NĐ-CP.
+              </p>
+              <div className="my-2.5 flex h-[7px] overflow-hidden rounded-full" aria-label="90% thực thi, 10% vận hành">
+                <span className="w-[90%] bg-son" />
+                <span className="w-[10%] bg-nghe" />
+              </div>
+              <div className="flex justify-between text-[11px]">
+                <span className="font-bold text-son">90% Thực thi</span>
+                <span className="font-bold text-ngheDeep">10% Vận hành</span>
+              </div>
+            </Link>
+
+            <Link
+              href="/campaigns?type=partner"
+              className="rounded-[14px] border-2 border-lineStrong bg-white p-[22px] transition duration-200 hover:-translate-y-0.5 hover:border-son hover:bg-sonMid hover:shadow-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-son"
+            >
+              <div className="mb-2.5 text-[28px] leading-none" aria-hidden="true">
+                &#128279;
+              </div>
+              <h3 className="mb-1 text-[15px] font-bold text-chamDeep">Chiến dịch Kết nối</h3>
+              <p className="text-[13px] leading-[1.6] text-inkMid">
+                Tiếp nhận qua tài khoản trung tâm VEA, sau đó phân bổ cho đối tác theo hồ sơ được duyệt. Webhook xác nhận và xuất E-Receipt tự động.
+              </p>
+              <div className="mt-4 flex flex-col gap-1.5 text-[13px] text-lua">
+                <span>&#10003; Đối soát tập trung theo từng giao dịch</span>
+                <span>&#10003; E-Receipt tự động qua email</span>
+              </div>
+            </Link>
+          </div>
+
+          <div className="relative grid gap-8 sm:grid-cols-3 sm:gap-0">
+            <div
+              aria-hidden="true"
+              className="absolute left-[calc(16.67%+14px)] right-[calc(16.67%+14px)] top-[30px] hidden h-0.5 bg-gradient-to-r from-son to-nghe sm:block"
+            />
             {howSteps.map(([num, title, text]) => (
-              <div key={num}>
-                <div className="font-mono text-2xl font-bold text-son">{num}</div>
-                <h4 className="mt-2 font-serif text-base font-semibold text-chamDeep">{title}</h4>
-                <p className="mt-1.5 text-sm leading-6 text-inkMid">{text}</p>
+              <div key={num} className="relative z-10 px-2 text-center sm:px-5">
+                <div className="mx-auto mb-3.5 flex h-[60px] w-[60px] items-center justify-center rounded-full border-[3px] border-son bg-white font-mono text-lg font-bold text-son">
+                  {num}
+                </div>
+                <h4 className="mb-1.5 text-[14.5px] font-bold text-chamDeep">{title}</h4>
+                <p className="text-[13px] leading-[1.65] text-inkMid">{text}</p>
               </div>
             ))}
           </div>

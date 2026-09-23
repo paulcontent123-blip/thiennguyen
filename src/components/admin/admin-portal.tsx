@@ -6,18 +6,24 @@ import { useRouter } from "next/navigation";
 import {
   activateCampaign,
   approveCampaign,
+  approvePersonalVerification,
   closeCampaign,
   approveOrganization,
   approveRescueApplication,
+  confirmDonationReceived,
   deleteRescueInvitation,
   deleteRescueTeam,
+  markDonationNeedsReview,
   markSosHandled,
   postAuditDisbursement,
   rejectCampaign,
+  rejectPersonalVerification,
   rejectOrganization,
   rejectRescueApplication,
   requestCampaignRevision,
+  requestPersonalVerificationRevision,
   requestOrganizationRevision,
+  upsertPlatformReceivingAccount,
 } from "@/app/admin/actions";
 import { RescueAccountForm } from "@/components/admin/rescue-account-form";
 import { createClient } from "@/lib/supabase/client";
@@ -38,6 +44,8 @@ type Campaign = {
   submitted_at: string | null;
   reviewed_at: string | null;
   created_at: string;
+  owner_type: string;
+  owner_user_id: string | null;
   organizations: Related<{ name: string }>;
   campaign_status_history: Array<{
     id: number;
@@ -59,6 +67,18 @@ type Organization = {
   license_note: string | null;
   license_file_path: string | null;
   created_at: string;
+};
+
+type PersonalProfile = {
+  user_id: string;
+  legal_name: string;
+  phone: string | null;
+  verification_status: string;
+  verification_document_path: string | null;
+  verification_note: string | null;
+  verified_at: string | null;
+  created_at: string;
+  document_url: string | null;
 };
 
 type Disbursement = {
@@ -191,7 +211,43 @@ type RescueInvitation = {
   created_at: string;
 };
 
-type Panel = "overview" | "campaigns" | "kyc" | "disbursement" | "sos";
+type ReceivingAccount = {
+  id: string;
+  kind: "domestic_vnd" | "international";
+  currency: string;
+  provider: string;
+  bank_id: string | null;
+  bank_name: string;
+  account_no: string;
+  account_name: string;
+  swift_code: string | null;
+  iban: string | null;
+  qr_image_url: string | null;
+  transfer_description_template: string;
+  is_active: boolean;
+  updated_at: string;
+};
+
+type Transaction = {
+  id: string;
+  tx_ref: string;
+  amount_vnd: number | string;
+  currency: string;
+  status: string;
+  donor_name: string | null;
+  receipt_email: string;
+  transfer_description: string;
+  receiving_bank_id: string;
+  receiving_account_no: string;
+  receiving_account_name: string;
+  failure_reason: string | null;
+  created_at: string;
+  expires_at: string;
+  completed_at: string | null;
+  campaigns: Related<{ title: string; slug: string }>;
+};
+
+type Panel = "overview" | "campaigns" | "kyc" | "personal" | "payments" | "disbursement" | "sos" | "donations";
 type CampaignFilter = "all" | "pending_review" | "needs_revision" | "approved";
 type AuditFilter = "pending" | "reviewed";
 
@@ -241,6 +297,10 @@ const statusPill: Record<string, { label: string; className: string }> = {
   inactive: { label: "Chưa kích hoạt", className: "bg-inkSoft/15 text-inkSoft" },
   en_route: { label: "Đang điều phối", className: "bg-sky/15 text-sky" },
   busy: { label: "Đang bận", className: "bg-nghe/15 text-ngheDeep" },
+  completed: { label: "Đã xác nhận", className: "bg-lua/15 text-lua" },
+  needs_review: { label: "Cần xem lại", className: "bg-nghe/15 text-ngheDeep" },
+  failed: { label: "Thất bại", className: "bg-son/15 text-son" },
+  refunded: { label: "Đã hoàn tiền", className: "bg-inkSoft/15 text-inkSoft" },
 };
 
 function Pill({ status }: { status: string }) {
@@ -253,7 +313,11 @@ function CampaignHistory({ campaign }: { campaign: Campaign }) {
     (left, right) => new Date(right.created_at).getTime() - new Date(left.created_at).getTime(),
   );
   return (
-    <details className="mt-2 text-xs">
+    <div className="mt-2 space-y-2">
+      <Link href={`/campaign-management/${campaign.id}`} className="inline-flex rounded-[4px] border border-sky px-2.5 py-1 text-xs font-bold text-sky hover:bg-sky hover:text-white">
+        Quản lý nội dung & Viral Kit
+      </Link>
+      <details className="text-xs">
       <summary className="cursor-pointer font-bold text-sky">Lịch sử trạng thái ({events.length})</summary>
       <ol className="mt-2 space-y-2 border-l border-line pl-3">
         {events.map((event) => (
@@ -267,7 +331,8 @@ function CampaignHistory({ campaign }: { campaign: Campaign }) {
           </li>
         ))}
       </ol>
-    </details>
+      </details>
+    </div>
   );
 }
 
@@ -338,12 +403,13 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
   );
 }
 
-export function AdminPortal({ campaigns, organizations, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports }: { campaigns: Campaign[]; organizations: Organization[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[] }) {
+export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions }: { campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[] }) {
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>("overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
   const [campaignProvinceFilter, setCampaignProvinceFilter] = useState<string>("");
   const [auditFilter, setAuditFilter] = useState<AuditFilter>("pending");
+  const [donationFilter, setDonationFilter] = useState<"pending" | "resolved">("pending");
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
@@ -365,6 +431,7 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
 
   const pendingCampaigns = campaigns.filter((campaign) => campaign.status === "pending_review").length;
   const pendingOrganizations = organizations.filter((organization) => organization.license_status === "pending").length;
+  const pendingPersonalProfiles = personalProfiles.filter((profile) => profile.verification_status === "pending").length;
   const pendingRescue = rescueApplications.filter((application) => application.status === "pending").length;
   const unhandledSos = sosReports.filter((report) => report.status !== "handled").length;
   const urgentSos = sosReports.filter((report) => report.status === "urgent").length;
@@ -382,19 +449,27 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
   const auditedDisbursements = disbursements.filter((item) => item.post_audit_status !== "not_reviewed").slice(0, 8);
   const visibleDisbursements = auditFilter === "pending" ? pendingDisbursements : auditedDisbursements;
 
+  const pendingTransactions = transactions.filter((tx) => tx.status === "pending");
+  const resolvedTransactions = transactions.filter((tx) => tx.status !== "pending").slice(0, 30);
+  const visibleTransactions = donationFilter === "pending" ? pendingTransactions : resolvedTransactions;
+
   const recentActivity = useMemo(() => {
     const items: { time: string; icon: string; label: string; detail: string; status: string }[] = [];
     campaigns.slice(0, 5).forEach((campaign) => items.push({ time: campaign.created_at, icon: "🎯", label: "Chiến dịch", detail: `${campaign.title} · ${firstRelated(campaign.organizations)?.name ?? ""}`, status: campaign.status }));
     organizations.slice(0, 5).forEach((organization) => items.push({ time: organization.created_at, icon: "🏛️", label: "KYC", detail: organization.name, status: organization.license_status }));
+    personalProfiles.slice(0, 5).forEach((profile) => items.push({ time: profile.created_at, icon: "👤", label: "Xác minh cá nhân", detail: profile.legal_name, status: profile.verification_status }));
     rescueApplications.slice(0, 5).forEach((application) => items.push({ time: application.created_at, icon: "🚑", label: "Cứu trợ", detail: application.team_name ?? application.contact_name, status: application.status }));
     sosReports.slice(0, 5).forEach((report) => items.push({ time: report.created_at, icon: "🚨", label: "SOS", detail: report.location_text, status: report.status }));
     return items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
-  }, [campaigns, organizations, rescueApplications, sosReports]);
+  }, [campaigns, organizations, personalProfiles, rescueApplications, sosReports]);
 
   const navItems: { key: Panel; icon: string; label: string }[] = [
     { key: "overview", icon: "📊", label: "Tổng quan" },
     { key: "campaigns", icon: "🎯", label: "Duyệt chiến dịch" },
     { key: "kyc", icon: "📋", label: "Xác minh giấy phép" },
+    { key: "personal", icon: "👤", label: "Xác minh cá nhân" },
+    { key: "payments", icon: "🏦", label: "Tài khoản nhận tiền" },
+    { key: "donations", icon: "🧾", label: "Đối soát quyên góp" },
     { key: "disbursement", icon: "💰", label: "Hậu kiểm giải ngân" },
     { key: "sos", icon: "📍", label: "SOS Reports" },
   ];
@@ -437,12 +512,96 @@ export function AdminPortal({ campaigns, organizations, disbursements, rescueApp
 
         {panel === "campaigns" ? <section>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h1 className="font-serif text-[21px] font-medium text-chamDeep">Duyệt chiến dịch</h1><div className="flex flex-wrap items-center gap-1.5">{[["all", `Tất cả (${campaigns.length})`], ["pending_review", `Chờ (${campaigns.filter((c) => c.status === "pending_review").length})`], ["needs_revision", `Cần bổ sung (${campaigns.filter((c) => c.status === "needs_revision").length})`], ["approved", `Đã duyệt (${campaigns.filter((c) => ["approved", "active", "closed"].includes(c.status)).length})`]].map(([value, label]) => <button key={value} type="button" onClick={() => setCampaignFilter(value as CampaignFilter)} className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${campaignFilter === value ? "border-son text-son" : "border-lineStrong text-inkMid hover:border-son hover:text-son"}`}>{label}</button>)}<select value={campaignProvinceFilter} onChange={(e) => setCampaignProvinceFilter(e.target.value)} className="h-[30px] rounded-full border border-lineStrong bg-white px-3 text-xs font-bold text-inkMid outline-none focus:border-son"><option value="">Tất cả tỉnh/thành</option>{PROVINCES.map((p) => <option key={p} value={p}>{p}</option>)}</select></div></div>
-          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[900px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Tổ chức</th><th className="px-3 py-2.5">Loại</th><th className="px-3 py-2.5">Mục tiêu</th><th className="px-3 py-2.5">Ngày gửi</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{filteredCampaigns.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-inkSoft">Không có chiến dịch nào.</td></tr> : filteredCampaigns.map((campaign) => <tr key={campaign.id} className="border-t border-line align-top"><td className="px-3 py-3"><div className="font-semibold text-chamDeep">{campaign.title}</div>{campaign.review_note ? <div className="mt-1 text-xs text-son">Lý do: {campaign.review_note}</div> : null}<CampaignHistory campaign={campaign} /></td><td className="px-3 py-3 text-inkMid">{firstRelated(campaign.organizations)?.name ?? "—"}{campaign.province ? <div className="text-xs text-sky">📍 {campaign.province}</div> : null}</td><td className="px-3 py-3 text-inkMid">{campaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối"}</td><td className="px-3 py-3 font-mono font-bold text-son">{amount(campaign.target_amount)}</td><td className="px-3 py-3 text-xs text-inkSoft">{fmtDate(campaign.submitted_at ?? campaign.created_at)}</td><td className="px-3 py-3"><Pill status={campaign.status} /></td><td className="px-3 py-3">{campaign.status === "pending_review" ? <ReviewActions approveAction={approveCampaign.bind(null, campaign.id)} reviseAction={requestCampaignRevision.bind(null, campaign.id)} rejectAction={rejectCampaign.bind(null, campaign.id)} /> : campaign.status === "approved" ? <form><button formAction={activateCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Kích hoạt</button></form> : campaign.status === "active" ? <form><button formAction={closeCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-chamDeep px-3 py-1.5 text-xs font-bold text-white">Đóng chiến dịch</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[900px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Chủ sở hữu</th><th className="px-3 py-2.5">Loại</th><th className="px-3 py-2.5">Mục tiêu</th><th className="px-3 py-2.5">Ngày gửi</th><th className="px-3 py-2.5">Trạng thái</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{filteredCampaigns.length === 0 ? <tr><td colSpan={7} className="px-3 py-8 text-center text-inkSoft">Không có chiến dịch nào.</td></tr> : filteredCampaigns.map((campaign) => <tr key={campaign.id} className="border-t border-line align-top"><td className="px-3 py-3"><div className="font-semibold text-chamDeep">{campaign.title}</div>{campaign.review_note ? <div className="mt-1 text-xs text-son">Lý do: {campaign.review_note}</div> : null}<CampaignHistory campaign={campaign} /></td><td className="px-3 py-3 text-inkMid">{campaign.owner_type === "individual" ? "Nhà hảo tâm đã xác minh" : firstRelated(campaign.organizations)?.name ?? "—"}{campaign.province ? <div className="text-xs text-sky">📍 {campaign.province}</div> : null}</td><td className="px-3 py-3 text-inkMid">{campaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối"}</td><td className="px-3 py-3 font-mono font-bold text-son">{amount(campaign.target_amount)}</td><td className="px-3 py-3 text-xs text-inkSoft">{fmtDate(campaign.submitted_at ?? campaign.created_at)}</td><td className="px-3 py-3"><Pill status={campaign.status} /></td><td className="px-3 py-3">{campaign.status === "pending_review" ? <ReviewActions approveAction={approveCampaign.bind(null, campaign.id)} reviseAction={requestCampaignRevision.bind(null, campaign.id)} rejectAction={rejectCampaign.bind(null, campaign.id)} /> : campaign.status === "approved" ? <form><button formAction={activateCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Kích hoạt</button></form> : campaign.status === "active" ? <form><button formAction={closeCampaign.bind(null, campaign.id)} className="rounded-[4px] bg-chamDeep px-3 py-1.5 text-xs font-bold text-white">Đóng chiến dịch</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
+        </section> : null}
+
+        {panel === "personal" ? <section>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><div><h1 className="font-serif text-[21px] font-medium text-chamDeep">Xác minh chủ sở hữu cá nhân</h1><p className="mt-1 text-sm text-inkMid">Kiểm tra hồ sơ riêng của donor trước khi mở quyền tạo chiến dịch cá nhân.</p></div><Pill status={pendingPersonalProfiles ? "pending" : "approved"} /></div>
+          <div className="grid gap-4 lg:grid-cols-2">{personalProfiles.length === 0 ? <div className="rounded-[8px] border border-line bg-white p-6 text-sm text-inkSoft">Chưa có hồ sơ cá nhân nào gửi xác minh.</div> : personalProfiles.map((profile) => <div key={profile.user_id} className={`rounded-[8px] border bg-white p-4 ${profile.verification_status === "approved" ? "border-lua" : "border-line"}`}><div className="flex items-start justify-between gap-3"><div><div className="font-serif text-base font-semibold text-chamDeep">{profile.legal_name}</div><div className="mt-1 text-xs text-inkSoft">{profile.phone || "Chưa cung cấp số điện thoại"}</div></div><Pill status={profile.verification_status} /></div><div className="mt-3 divide-y divide-line rounded-[4px] bg-paper px-3"><div className="flex items-center justify-between gap-3 py-2 text-xs"><span className="text-inkMid">Tài liệu</span>{profile.document_url ? <a href={profile.document_url} target="_blank" rel="noreferrer" className="font-bold text-sky hover:underline">Mở giấy tờ ↗</a> : <span className="font-bold text-son">Chưa upload</span>}</div><div className="flex items-center justify-between gap-3 py-2 text-xs"><span className="text-inkMid">Gửi lúc</span><strong className="text-chamDeep">{fmtDate(profile.created_at)}</strong></div></div>{profile.verification_note ? <div className="mt-3 rounded-[4px] bg-nghe/10 p-2 text-xs text-ngheDeep">Ghi chú: {profile.verification_note}</div> : null}{profile.verification_status === "pending" ? <div className="mt-3"><ReviewActions approveAction={approvePersonalVerification.bind(null, profile.user_id)} reviseAction={requestPersonalVerificationRevision.bind(null, profile.user_id)} rejectAction={rejectPersonalVerification.bind(null, profile.user_id)} /></div> : null}</div>)}</div>
         </section> : null}
 
         {panel === "kyc" ? <section>
           <h1 className="mb-5 font-serif text-[21px] font-medium text-chamDeep">Xác minh giấy phép tổ chức</h1>
           <div className="grid gap-4 lg:grid-cols-2">{organizations.length === 0 ? <div className="rounded-[8px] border border-line bg-white p-6 text-sm text-inkSoft">Chưa có tổ chức nào đăng ký.</div> : organizations.map((organization) => <div key={organization.id} className={`rounded-[8px] border bg-white p-4 ${organization.license_status === "approved" ? "border-lua" : "border-line"}`}><div className="flex items-start justify-between gap-3"><div><div className="font-serif text-base font-semibold text-chamDeep">{organization.name}</div><div className="mt-1 text-xs text-inkSoft">Người đại diện: {organization.legal_representative_name}</div></div><Pill status={organization.license_status} /></div><div className="mt-3 divide-y divide-line rounded-[4px] bg-paper px-3"><div className="flex items-center justify-between gap-3 py-2 text-xs"><span className="text-inkMid">Số giấy phép</span><strong className="text-chamDeep">{organization.license_number ?? "Chưa cung cấp"}</strong></div><div className="flex items-center justify-between gap-3 py-2 text-xs"><span className="text-inkMid">Tài liệu</span>{organization.license_file_path ? organization.license_file_path.startsWith("http") ? <a href={organization.license_file_path} target="_blank" rel="noreferrer" className="font-bold text-sky hover:underline">Mở giấy phép ↗</a> : <span className="font-bold text-lua">Đã upload</span> : <span className="font-bold text-son">Chưa upload</span>}</div></div>{organization.license_note ? <div className="mt-3 rounded-[4px] bg-nghe/10 p-2 text-xs text-ngheDeep">Ghi chú: {organization.license_note}</div> : null}{organization.license_status === "pending" || organization.license_status === "needs_revision" ? <div className="mt-3"><ReviewActions approveAction={approveOrganization.bind(null, organization.id)} reviseAction={requestOrganizationRevision.bind(null, organization.id)} rejectAction={rejectOrganization.bind(null, organization.id)} /></div> : null}</div>)}</div>
+        </section> : null}
+
+        {panel === "payments" ? <section>
+          <div className="mb-5"><h1 className="font-serif text-[21px] font-medium text-chamDeep">Tài khoản nhận tiền trung tâm VEA</h1><p className="mt-1 max-w-3xl text-sm leading-6 text-inkMid">Mọi khoản ủng hộ đi vào tài khoản trung tâm theo loại tiền. Tổ chức và chủ chiến dịch không được tự thay đổi đích nhận tiền.</p></div>
+          <div className="mb-4 rounded-[8px] border border-nghe/30 bg-nghe/10 px-4 py-3 text-sm leading-6 text-ngheDeep">Webhook secret và khóa ký không nhập tại đây. Chúng phải nằm trong biến môi trường server sau khi ngân hàng cung cấp đặc tả API.</div>
+          <div className="grid gap-5 xl:grid-cols-2">
+            {(["domestic_vnd", "international"] as const).map((kind) => {
+              const account = receivingAccounts.find((item) => item.kind === kind) ?? null;
+              const domestic = kind === "domestic_vnd";
+              return <form key={kind} action={async (formData) => {
+                const result = await upsertPlatformReceivingAccount(formData);
+                window.alert(result.message);
+                if (result.ok) router.refresh();
+              }} className="rounded-[8px] border border-line bg-white p-5">
+                <input type="hidden" name="id" value={account?.id ?? ""} />
+                <input type="hidden" name="kind" value={kind} />
+                <div className="mb-4 flex items-start justify-between gap-3"><div><h2 className="font-serif text-lg font-semibold text-chamDeep">{domestic ? "Tài khoản VND trong nước" : "Tài khoản quốc tế/ngoại tệ"}</h2><p className="mt-1 text-xs leading-5 text-inkSoft">{domestic ? "Dùng để sinh VietQR cho giao dịch VND." : "Lưu thông tin ngân hàng quốc tế; QR sẽ bật sau khi chốt API ngân hàng."}</p></div><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${account?.is_active ? "bg-lua/15 text-lua" : "bg-inkSoft/15 text-inkSoft"}`}>{account?.is_active ? "Đang hoạt động" : "Chưa kích hoạt"}</span></div>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1 text-xs font-bold text-chamDeep">Tiền tệ<input name="currency" required readOnly={domestic} defaultValue={account?.currency ?? (domestic ? "VND" : "USD")} className="rounded-[6px] border border-line px-3 py-2 font-normal uppercase read-only:bg-paper" /></label>
+                  <label className="grid gap-1 text-xs font-bold text-chamDeep">Nhà cung cấp webhook<input name="provider" required defaultValue={account?.provider ?? ""} placeholder="Tên ngân hàng/provider" className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                  <label className="grid gap-1 text-xs font-bold text-chamDeep">Mã ngân hàng {domestic ? "VietQR" : "(nếu có)"}<input name="bankId" required={domestic} defaultValue={account?.bank_id ?? ""} placeholder={domestic ? "VCB, MBBank..." : "Bank code"} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                  <label className="grid gap-1 text-xs font-bold text-chamDeep">Tên ngân hàng<input name="bankName" required defaultValue={account?.bank_name ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                  <label className="grid gap-1 text-xs font-bold text-chamDeep">Số tài khoản<input name="accountNo" required defaultValue={account?.account_no ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                  <label className="grid gap-1 text-xs font-bold text-chamDeep">Tên chủ tài khoản<input name="accountName" required defaultValue={account?.account_name ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                  {!domestic ? <><label className="grid gap-1 text-xs font-bold text-chamDeep">SWIFT/BIC<input name="swiftCode" defaultValue={account?.swift_code ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal uppercase" /></label><label className="grid gap-1 text-xs font-bold text-chamDeep">IBAN (nếu có)<input name="iban" defaultValue={account?.iban ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal uppercase" /></label><label className="grid gap-1 text-xs font-bold text-chamDeep sm:col-span-2">URL ảnh QR quốc tế (nếu ngân hàng cung cấp)<input name="qrImageUrl" type="url" defaultValue={account?.qr_image_url ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label></> : null}
+                  <label className="grid gap-1 text-xs font-bold text-chamDeep sm:col-span-2">Mẫu nội dung chuyển khoản<input name="descriptionTemplate" required defaultValue={account?.transfer_description_template ?? "Ung ho {tx_ref}"} className="rounded-[6px] border border-line px-3 py-2 font-normal" /><span className="font-normal text-inkSoft">Bắt buộc chứa {'{tx_ref}'} để đối soát.</span></label>
+                </div>
+                <div className="mt-4 flex items-center justify-between gap-3"><label className="flex items-center gap-2 text-xs font-bold text-chamDeep"><input name="isActive" type="checkbox" defaultChecked={account?.is_active ?? false} /> Cho phép nhận tiền</label><button className="button-primary">Lưu tài khoản</button></div>
+                {account ? <p className="mt-3 text-[11px] text-inkSoft">Cập nhật gần nhất: {fmtDate(account.updated_at)}</p> : null}
+              </form>;
+            })}
+          </div>
+        </section> : null}
+
+        {panel === "donations" ? <section>
+          <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+            <div><h1 className="font-serif text-[21px] font-medium text-chamDeep">Đối soát quyên góp thủ công</h1><p className="mt-1 max-w-3xl text-sm leading-6 text-inkMid">Chưa có webhook ngân hàng tự động. Kiểm tra sao kê tài khoản nhận tiền, đối chiếu nội dung chuyển khoản (chứa mã giao dịch) rồi xác nhận hoặc đánh dấu cần xem lại.</p></div>
+            <div className="flex gap-1.5">
+              <button type="button" onClick={() => setDonationFilter("pending")} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${donationFilter === "pending" ? "border-son text-son" : "border-lineStrong text-inkMid"}`}>Chờ xác nhận ({pendingTransactions.length})</button>
+              <button type="button" onClick={() => setDonationFilter("resolved")} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${donationFilter === "resolved" ? "border-son text-son" : "border-lineStrong text-inkMid"}`}>Đã xử lý ({resolvedTransactions.length})</button>
+            </div>
+          </div>
+          {donationFilter === "pending" ? <div className="space-y-4">
+            {visibleTransactions.length === 0 ? <div className="rounded-[8px] border border-line bg-white px-4 py-8 text-center text-sm text-inkSoft">Không có giao dịch nào đang chờ xác nhận.</div> : null}
+            {visibleTransactions.map((tx) => <div key={tx.id} className="rounded-[8px] border border-line bg-white p-4">
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="font-bold text-chamDeep">{firstRelated(tx.campaigns)?.title ?? "—"}</div>
+                  <div className="mt-1 font-mono font-bold text-son">{amount(tx.amount_vnd)} {tx.currency !== "VND" ? `(${tx.currency})` : ""}</div>
+                </div>
+                <Pill status={tx.status} />
+              </div>
+              <div className="grid gap-2 rounded-[6px] bg-paper p-3 text-xs sm:grid-cols-2">
+                <div><span className="text-inkSoft">Mã giao dịch: </span><strong className="font-mono text-chamDeep">{tx.tx_ref}</strong></div>
+                <div><span className="text-inkSoft">Nội dung chuyển khoản: </span><strong className="font-mono text-chamDeep">{tx.transfer_description}</strong></div>
+                <div><span className="text-inkSoft">Người ủng hộ: </span><strong className="text-chamDeep">{tx.donor_name || "Ẩn danh"}</strong> <span className="text-inkSoft">· {tx.receipt_email}</span></div>
+                <div><span className="text-inkSoft">Tài khoản nhận: </span><strong className="text-chamDeep">{tx.receiving_account_name} · {tx.receiving_account_no}</strong></div>
+                <div><span className="text-inkSoft">Tạo lúc: </span><strong className="text-chamDeep">{fmtDate(tx.created_at)}</strong></div>
+                <div><span className="text-inkSoft">Hết hạn: </span><strong className="text-chamDeep">{fmtDate(tx.expires_at)}</strong></div>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <form action={async () => {
+                  const result = await confirmDonationReceived(tx.id);
+                  window.alert(result.message);
+                  if (result.ok) router.refresh();
+                }}>
+                  <button className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white transition hover:bg-lua/90">✅ Xác nhận đã nhận tiền</button>
+                </form>
+                <form action={async (formData) => {
+                  const result = await markDonationNeedsReview(tx.id, formData);
+                  window.alert(result.message);
+                  if (result.ok) router.refresh();
+                }} className="flex flex-wrap items-center gap-2">
+                  <input name="note" placeholder="Lý do cần xem lại" className="w-48 rounded-[4px] border border-line px-2 py-1.5 text-xs outline-none focus:border-son" />
+                  <button className="rounded-[4px] bg-nghe/15 px-3 py-1.5 text-xs font-bold text-ngheDeep transition hover:bg-nghe/25">Đánh dấu cần xem lại</button>
+                </form>
+              </div>
+            </div>)}
+          </div> : <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[860px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Mã giao dịch</th><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Người ủng hộ</th><th className="px-3 py-2.5">Xử lý lúc</th><th className="px-3 py-2.5">Trạng thái</th></tr></thead><tbody>{visibleTransactions.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-inkSoft">Chưa có giao dịch nào được xử lý.</td></tr> : visibleTransactions.map((tx) => <tr key={tx.id} className="border-t border-line align-top"><td className="px-3 py-2.5 font-mono text-xs text-chamDeep">{tx.tx_ref}</td><td className="px-3 py-2.5 text-inkMid">{firstRelated(tx.campaigns)?.title ?? "—"}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{amount(tx.amount_vnd)}</td><td className="px-3 py-2.5 text-inkMid">{tx.donor_name || "Ẩn danh"}<div className="text-xs text-inkSoft">{tx.receipt_email}</div></td><td className="px-3 py-2.5 text-xs text-inkSoft">{fmtDate(tx.completed_at ?? tx.created_at)}{tx.failure_reason ? <div className="mt-0.5 text-son">Lý do: {tx.failure_reason}</div> : null}</td><td className="px-3 py-2.5"><Pill status={tx.status} /></td></tr>)}</tbody></table></div>}
         </section> : null}
 
         {panel === "disbursement" ? <section>

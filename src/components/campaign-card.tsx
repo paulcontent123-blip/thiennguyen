@@ -9,6 +9,7 @@ export type CampaignCardData = {
   summary: string;
   targetAmount: number;
   organizationName?: string;
+  ownerType?: string;
   campaignType?: string;
   category?: string | null;
   province?: string | null;
@@ -37,7 +38,7 @@ export function CampaignCard({ campaign }: { campaign: CampaignCardData }) {
       </div>
       <h3 className="font-serif text-lg font-semibold leading-snug text-chamDeep group-hover:text-son">{campaign.title}</h3>
       <p className="line-clamp-3 text-[13px] leading-5 text-inkMid">{campaign.summary || "Chiến dịch thiện nguyện đang cần sự đồng hành của cộng đồng."}</p>
-      {campaign.organizationName ? <p className="text-xs font-bold text-inkSoft">Đơn vị: {campaign.organizationName}</p> : null}
+      {campaign.ownerType === "individual" ? <p className="text-xs font-bold text-inkSoft">Chủ chiến dịch: Nhà hảo tâm đã xác minh</p> : campaign.organizationName ? <p className="text-xs font-bold text-inkSoft">Đơn vị: {campaign.organizationName}</p> : null}
       <div className="mt-auto flex items-center justify-between border-t border-line pt-3 text-[13px]">
         <span className="font-bold text-son">{currency.format(campaign.targetAmount)}₫</span>
         <span className="font-bold text-sky">Xem chi tiết →</span>

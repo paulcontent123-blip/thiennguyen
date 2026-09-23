@@ -4,13 +4,11 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
   deleteCampaignMedia,
-  deleteCampaignPaymentConfig,
   deleteCampaignSeo,
   deleteCampaignShareSettings,
   deleteCampaignUpdate,
   generateCampaignPoster,
   upsertCampaignMedia,
-  upsertCampaignPaymentConfig,
   upsertCampaignSeo,
   upsertCampaignShareSettings,
   upsertCampaignUpdate,
@@ -18,7 +16,6 @@ import {
 } from "@/app/organization/campaign-content-actions";
 import type {
   CampaignMedia,
-  CampaignPaymentConfig,
   CampaignSeo,
   CampaignShareSettings,
   CampaignUpdate,
@@ -47,14 +44,12 @@ export function CampaignContentManager({
   campaignId,
   media,
   updates,
-  paymentConfig,
   seo,
   shareSettings,
 }: {
   campaignId: string;
   media: CampaignMedia[];
   updates: CampaignUpdate[];
-  paymentConfig: CampaignPaymentConfig | null;
   seo: CampaignSeo | null;
   shareSettings: CampaignShareSettings | null;
 }) {
@@ -86,7 +81,7 @@ export function CampaignContentManager({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h2 className="font-serif text-xl font-semibold text-chamDeep">Quản lý nội dung công khai</h2>
-            <p className="mt-1 text-sm leading-6 text-inkSoft">Lưu media, VietQR, Schema.org và cấu hình chia sẻ cho trang chiến dịch.</p>
+            <p className="mt-1 text-sm leading-6 text-inkSoft">Lưu media, Schema.org và cấu hình chia sẻ cho trang chiến dịch. Tài khoản nhận tiền do Admin VEA quản lý tập trung.</p>
           </div>
           <span className="rounded-full bg-sky/10 px-3 py-1 text-xs font-bold text-sky">CRUD theo chiến dịch</span>
         </div>
@@ -156,20 +151,6 @@ export function CampaignContentManager({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="rounded-[12px] border border-line bg-white p-6">
-          <h2 className="font-serif text-xl font-semibold text-chamDeep">VietQR động</h2>
-          <p className="mt-1 text-sm leading-6 text-inkSoft">Chỉ lưu thông tin tài khoản nhận tiền. QR sẽ được sinh theo số tiền và mã giao dịch khi mở luồng quyên góp.</p>
-          <form action={(formData) => run("payment", () => upsertCampaignPaymentConfig(formData))} className="mt-5 space-y-3">
-            <input type="hidden" name="campaignId" value={campaignId} />
-            <input name="bankId" required defaultValue={paymentConfig?.bank_id ?? ""} placeholder="Mã ngân hàng, ví dụ MBBank" className="w-full rounded-[8px] border border-line px-3 py-2 text-sm" />
-            <input name="accountNo" required defaultValue={paymentConfig?.account_no ?? ""} placeholder="Số tài khoản" className="w-full rounded-[8px] border border-line px-3 py-2 text-sm" />
-            <input name="accountName" required defaultValue={paymentConfig?.account_name ?? ""} placeholder="Tên tài khoản" className="w-full rounded-[8px] border border-line px-3 py-2 text-sm" />
-            <input name="descriptionTemplate" defaultValue={paymentConfig?.description_template ?? "TN-{campaign_slug}"} placeholder="TN-{campaign_slug} hoặc TN-{tx_ref}" className="w-full rounded-[8px] border border-line px-3 py-2 text-sm" />
-            <div className="flex items-center justify-between gap-3"><PublicCheckbox name="isActive" label="Cho phép hiển thị QR công khai" checked={paymentConfig?.is_active ?? false} /><button type="submit" disabled={busy !== null} className="button-primary disabled:opacity-50">{busy === "payment" ? "Đang lưu…" : "Lưu VietQR"}</button></div>
-          </form>
-          {paymentConfig ? <button type="button" onClick={() => run("delete-payment", () => deleteCampaignPaymentConfig(campaignId))} disabled={busy !== null} className="mt-3 text-xs font-bold text-son hover:underline">Xóa cấu hình VietQR</button> : null}
-        </section>
-
         <section className="rounded-[12px] border border-line bg-white p-6">
           <h2 className="font-serif text-xl font-semibold text-chamDeep">Schema.org và SEO</h2>
           <p className="mt-1 text-sm leading-6 text-inkSoft">Lưu JSON-LD để trang công khai có thể render dữ liệu có cấu trúc.</p>

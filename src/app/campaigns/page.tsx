@@ -18,6 +18,7 @@ type PublicCampaign = CampaignCardData & {
   category: string | null;
   province: string | null;
   status: string;
+  ownerType: string;
   publishedAt: string | null;
 };
 
@@ -36,11 +37,13 @@ function buildPageHref(searchParams: SearchParams, page: number) {
   const category = firstParam(searchParams.category);
   const province = firstParam(searchParams.province);
   const type = firstParam(searchParams.type);
+  const owner = firstParam(searchParams.owner);
 
   if (query) params.set("q", query);
   if (category) params.set("category", category);
   if (province) params.set("province", province);
   if (type) params.set("type", type);
+  if (owner) params.set("owner", owner);
   if (page > 1) params.set("page", String(page));
 
   const queryString = params.toString();
@@ -57,12 +60,13 @@ async function getPublicCampaigns(searchParams: SearchParams, page: number) {
   const category = firstParam(searchParams.category);
   const province = firstParam(searchParams.province);
   const type = firstParam(searchParams.type);
+  const owner = firstParam(searchParams.owner);
   const from = (page - 1) * PAGE_SIZE;
 
   let campaignsQuery = supabase
     .from("campaigns")
     .select(
-      "id, organization_id, slug, title, summary, target_amount, campaign_type, category, province, status, published_at, created_at",
+      "id, organization_id, owner_type, slug, title, summary, target_amount, campaign_type, category, province, status, published_at, created_at",
       { count: "exact" },
     )
     .in("status", [...PUBLIC_STATUSES])
@@ -80,12 +84,15 @@ async function getPublicCampaigns(searchParams: SearchParams, page: number) {
   if (type === "direct" || type === "partner") {
     campaignsQuery = campaignsQuery.eq("campaign_type", type);
   }
+  if (owner === "organization" || owner === "individual") {
+    campaignsQuery = campaignsQuery.eq("owner_type", owner);
+  }
 
   const { data, count, error } = await campaignsQuery;
   if (error) throw new Error(error.message);
 
   const rows = data ?? [];
-  const organizationIds = Array.from(new Set(rows.map((campaign) => campaign.organization_id)));
+  const organizationIds = Array.from(new Set(rows.map((campaign) => campaign.organization_id).filter(Boolean)));
   const { data: organizations, error: organizationError } = organizationIds.length
     ? await supabase.from("organizations").select("id, name").in("id", organizationIds)
     : { data: [], error: null };
@@ -99,7 +106,8 @@ async function getPublicCampaigns(searchParams: SearchParams, page: number) {
     title: campaign.title,
     summary: campaign.summary,
     targetAmount: Number(campaign.target_amount),
-    organizationName: organizationNames.get(campaign.organization_id) ?? "Tổ chức thiện nguyện",
+    organizationName: campaign.owner_type === "individual" ? undefined : organizationNames.get(campaign.organization_id) ?? "Tổ chức thiện nguyện",
+    ownerType: campaign.owner_type,
     campaignType: campaign.campaign_type,
     category: campaign.category,
     province: campaign.province,
@@ -123,6 +131,7 @@ export default async function CampaignsPage({ searchParams = {} }: { searchParam
   const selectedCategory = firstParam(searchParams.category) ?? "";
   const selectedProvince = firstParam(searchParams.province) ?? "";
   const selectedType = firstParam(searchParams.type) ?? "";
+  const selectedOwner = firstParam(searchParams.owner) ?? "";
 
   return (
     <main className="min-h-screen bg-paper">
@@ -139,7 +148,7 @@ export default async function CampaignsPage({ searchParams = {} }: { searchParam
           <span className="rounded-full bg-luaSoft px-3 py-1.5 text-sm font-bold text-lua">{total} chiến dịch</span>
         </div>
 
-        <form className="mt-8 grid gap-3 rounded-[14px] border border-line bg-white p-4 md:grid-cols-[minmax(0,1fr)_170px_170px_150px_auto]">
+        <form className="mt-8 grid gap-3 rounded-[14px] border border-line bg-white p-4 md:grid-cols-[minmax(0,1fr)_170px_170px_150px_150px_auto]">
           <label className="sr-only" htmlFor="campaign-search">Tìm kiếm chiến dịch</label>
           <input
             id="campaign-search"
@@ -178,6 +187,17 @@ export default async function CampaignsPage({ searchParams = {} }: { searchParam
             <option value="">Tất cả loại</option>
             <option value="direct">Trực tiếp</option>
             <option value="partner">Kết nối</option>
+          </select>
+          <label className="sr-only" htmlFor="campaign-owner">Chủ sở hữu</label>
+          <select
+            id="campaign-owner"
+            name="owner"
+            defaultValue={selectedOwner}
+            className="h-11 rounded-[8px] border border-lineStrong bg-paper px-3 text-sm text-chamDeep outline-none focus:border-son"
+          >
+            <option value="">Tất cả chủ sở hữu</option>
+            <option value="organization">Tổ chức</option>
+            <option value="individual">Cá nhân đã xác minh</option>
           </select>
           <button type="submit" className="button-primary h-11">Lọc chiến dịch</button>
         </form>

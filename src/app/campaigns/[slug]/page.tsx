@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { CampaignDetailTabs, CampaignShare } from "@/components/campaigns/campaign-detail-tabs";
 import { DonationDialog } from "@/components/campaigns/donation-dialog";
 import { SiteHeader } from "@/components/site-header";
-import { type CampaignMedia, type CampaignPaymentConfig, type CampaignSeo, type CampaignShareSettings, type CampaignUpdate } from "@/lib/campaigns/content";
+import { type CampaignMedia, type CampaignSeo, type CampaignShareSettings, type CampaignUpdate } from "@/lib/campaigns/content";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -35,7 +35,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   const supabase = createClient();
   const { data: campaign, error } = await supabase
     .from("campaigns")
-    .select("id, organization_id, slug, title, summary, description, target_amount, campaign_type, category, province, status, deadline, published_at, created_at")
+    .select("id, organization_id, owner_type, slug, title, summary, description, target_amount, campaign_type, category, province, status, deadline, published_at, created_at")
     .eq("slug", params.slug)
     .in("status", [...PUBLIC_STATUSES])
     .maybeSingle();
@@ -43,19 +43,22 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   if (error) throw new Error(error.message);
   if (!campaign) notFound();
 
-  const { data: organization, error: organizationError } = await supabase
-    .from("organizations")
-    .select("id, name, avatar_url, license_status")
-    .eq("id", campaign.organization_id)
-    .maybeSingle();
+  const isPersonalCampaign = campaign.owner_type === "individual";
+  const { data: organization, error: organizationError } = isPersonalCampaign
+    ? { data: null, error: null }
+    : await supabase
+        .from("organizations")
+        .select("id, name, avatar_url, license_status")
+        .eq("id", campaign.organization_id)
+        .maybeSingle();
 
   if (organizationError) throw new Error(organizationError.message);
-  if (!organization || organization.license_status !== "approved") notFound();
+  if (!isPersonalCampaign && (!organization || organization.license_status !== "approved")) notFound();
 
   const [
     { data: media, error: mediaError },
     { data: updates, error: updatesError },
-    { data: paymentConfig, error: paymentError },
+    { data: donationAvailable, error: donationAvailabilityError },
     { data: seo, error: seoError },
     { data: shareSettings, error: shareError },
   ] = await Promise.all([
@@ -72,12 +75,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
       .eq("campaign_id", campaign.id)
       .eq("is_public", true)
       .order("event_at", { ascending: false }),
-    supabase
-      .from("campaign_payment_configs")
-      .select("campaign_id, provider, bank_id, account_no, account_name, description_template, is_active, created_at, updated_at")
-      .eq("campaign_id", campaign.id)
-      .eq("is_active", true)
-      .maybeSingle(),
+    supabase.rpc("donation_currency_available", { p_currency: "VND" }),
     supabase
       .from("campaign_seo")
       .select("campaign_id, meta_title, meta_description, canonical_url, schema_type, schema_json, is_public, created_at, updated_at")
@@ -94,7 +92,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
 
   if (mediaError) throw new Error(mediaError.message);
   if (updatesError) throw new Error(updatesError.message);
-  if (paymentError) throw new Error(paymentError.message);
+  if (donationAvailabilityError) console.warn("Central receiving account availability is unavailable", donationAvailabilityError.code);
   if (seoError) throw new Error(seoError.message);
   if (shareError) throw new Error(shareError.message);
 
@@ -125,7 +123,6 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   const progressPercent = targetAmount > 0 ? Math.min(100, Math.round((receivedAmount / targetAmount) * 100)) : 0;
   const typedMedia = (media ?? []) as CampaignMedia[];
   const typedUpdates = (updates ?? []) as CampaignUpdate[];
-  const typedPaymentConfig = (paymentConfig ?? null) as CampaignPaymentConfig | null;
   const typedSeo = (seo ?? null) as CampaignSeo | null;
   const typedShareSettings = (shareSettings ?? null) as CampaignShareSettings | null;
   const cover = typedMedia.find((item) => item.media_type === "cover") ?? null;
@@ -155,16 +152,16 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
             <section>
               <div id="organization" className="mb-3 flex items-center gap-2.5">
                 <div className="relative flex h-[34px] w-[34px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-sonSoft text-base">
-                  {organization.avatar_url ? (
+                  {organization?.avatar_url ? (
                     <Image src={organization.avatar_url} alt="" fill unoptimized className="object-cover" />
-                  ) : "🏛️"}
+                  ) : isPersonalCampaign ? "👤" : "🏛️"}
                 </div>
                 <div>
-                  <div className="text-[13px] font-bold text-chamDeep">{organization.name}</div>
-                  <div className="text-[11.5px] text-lua">✓ Đã xác thực · Hồ sơ tổ chức hợp lệ</div>
+                  <div className="text-[13px] font-bold text-chamDeep">{organization?.name ?? "Nhà hảo tâm đã xác minh"}</div>
+                  <div className="text-[11.5px] text-lua">✓ Đã xác thực · {isPersonalCampaign ? "Hồ sơ cá nhân hợp lệ" : "Hồ sơ tổ chức hợp lệ"}</div>
                 </div>
                 <a href="#organization" className="ml-auto rounded-[8px] border border-lineStrong px-3 py-1.5 text-xs font-semibold text-inkMid hover:border-son hover:text-son">
-                  Xem tổ chức →
+                  {isPersonalCampaign ? "Xem hồ sơ →" : "Xem tổ chức →"}
                 </a>
               </div>
 
@@ -205,7 +202,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
               operationAmount={operationAmount}
             />
 
-            <VerificationDocuments licenseStatus={organization.license_status} />
+            {isPersonalCampaign ? <PersonalVerificationDocuments /> : <VerificationDocuments licenseStatus={organization?.license_status ?? "pending"} />}
 
             <CampaignDetailTabs
               title={campaign.title}
@@ -248,8 +245,8 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
                 campaignSlug={campaign.slug}
                 campaignTitle={campaign.title}
                 campaignType={campaign.campaign_type}
-                canDonate={campaign.status === "active" && Boolean(typedPaymentConfig?.is_active)}
-                disabledReason={campaign.status === "closed" ? "Chiến dịch đã đóng" : campaign.status !== "active" ? "Chưa mở nhận ủng hộ" : "Chưa cấu hình VietQR"}
+                canDonate={campaign.status === "active" && donationAvailable === true}
+                disabledReason={campaign.status === "closed" ? "Chiến dịch đã đóng" : campaign.status !== "active" ? "Chưa mở nhận ủng hộ" : "Hệ thống chưa mở tài khoản nhận VND"}
                 defaultEmail={authResult.data.user?.email ?? ""}
                 isAuthenticated={Boolean(authResult.data.user)}
               />
@@ -295,7 +292,7 @@ function CashflowTree({
             <TreeNode icon="⚙" label="Ví vận hành (10%)" amount={operationAmount} meta="Logistics, xác thực và chi phí vận hành Quỹ" tone="ops" />
           </>
         ) : (
-          <TreeNode icon="🔗" label="Đối tác thụ hưởng" amount={receivedAmount} meta="Tiền chuyển thẳng đến tài khoản đối tác và chỉ hiển thị sau khi giao dịch được xác nhận" tone="exec" />
+          <TreeNode icon="🔗" label="Phân bổ cho đối tác thụ hưởng" amount={receivedAmount} meta="Tiền được nhận qua tài khoản trung tâm VEA, sau đó phân bổ và công khai chứng từ theo hồ sơ đã duyệt" tone="exec" />
         )}
       </TreeNode>
       <p className="mt-4 rounded-[8px] bg-paper px-3 py-2 text-xs leading-5 text-inkSoft">Dữ liệu Cashflow Tree sẽ tự động thay đổi khi hệ thống ghi nhận transaction và hồ sơ giải ngân hợp lệ.</p>
@@ -353,6 +350,19 @@ function VerificationDocuments({ licenseStatus }: { licenseStatus: string }) {
       <div className="mb-3 border-b border-line pb-2 text-sm font-bold text-chamDeep">Tài liệu xác thực</div>
       <div className="flex flex-col gap-2">
         <EvidenceRow icon="📋" title="Hồ sơ tổ chức và giấy phép hoạt động" action={licenseStatus === "approved" ? "✓ Đã xác thực" : "Đang kiểm tra"} verified={licenseStatus === "approved"} />
+        <EvidenceRow icon="🏛️" title="Chiến dịch đã được Admin phê duyệt" action="✓ Đã xác thực" verified />
+        <EvidenceRow icon="📄" title="Chứng từ giao dịch và giải ngân" action="Sẽ cập nhật" />
+      </div>
+    </section>
+  );
+}
+
+function PersonalVerificationDocuments() {
+  return (
+    <section className="mt-6">
+      <div className="mb-3 border-b border-line pb-2 text-sm font-bold text-chamDeep">Tài liệu xác thực</div>
+      <div className="flex flex-col gap-2">
+        <EvidenceRow icon="👤" title="Hồ sơ chủ sở hữu cá nhân" action="✓ Đã xác minh" verified />
         <EvidenceRow icon="🏛️" title="Chiến dịch đã được Admin phê duyệt" action="✓ Đã xác thực" verified />
         <EvidenceRow icon="📄" title="Chứng từ giao dịch và giải ngân" action="Sẽ cập nhật" />
       </div>

@@ -3,6 +3,8 @@ import type { AppRole } from "./roles";
 export const ROUTE_ROLES: ReadonlyArray<{ prefix: string; roles: readonly AppRole[] }> = [
   { prefix: "/admin", roles: ["admin"] },
   { prefix: "/organization", roles: ["org"] },
+  { prefix: "/personal-campaigns", roles: ["donor"] },
+  { prefix: "/campaign-management", roles: ["donor", "org", "admin"] },
   { prefix: "/rescue/operations", roles: ["rescue_team", "admin"] },
   { prefix: "/account", roles: ["donor", "org", "rescue_team", "admin"] },
 ];

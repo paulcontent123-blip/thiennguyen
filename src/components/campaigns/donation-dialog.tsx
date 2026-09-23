@@ -189,7 +189,7 @@ export function DonationDialog({
                       ) : null}
 
                       {campaignType !== "direct" ? (
-                        <p className="rounded-[10px] border border-sky/20 bg-skySoft p-3 text-xs leading-5 text-inkMid">Khoản ủng hộ được chuyển thẳng đến tài khoản của tổ chức/đối tác thụ hưởng. Nền tảng không giữ tiền.</p>
+                        <p className="rounded-[10px] border border-sky/20 bg-skySoft p-3 text-xs leading-5 text-inkMid">Khoản ủng hộ được tiếp nhận qua tài khoản trung tâm của đơn vị thành viên VEA Group, sau đó đối soát và phân bổ cho đối tác thụ hưởng theo hồ sơ chiến dịch đã duyệt.</p>
                       ) : null}
 
                       <div className="grid gap-3 sm:grid-cols-2">
@@ -241,21 +241,35 @@ function DonationPaymentStep({
       <h2 className="mt-2 font-serif text-2xl font-semibold text-chamDeep">Quét QR để chuyển khoản</h2>
       <p className="mt-1 text-sm leading-6 text-inkMid">Không sửa số tiền hoặc nội dung chuyển khoản để hệ thống có thể đối soát tự động.</p>
 
-      <div className="mt-5 grid gap-5 sm:grid-cols-[220px_minmax(0,1fr)]">
-        <div className="mx-auto rounded-[12px] border border-line bg-white p-2 shadow-card">
-          <Image src={intent.qrUrl} width={204} height={204} alt={`VietQR ${intent.txRef}`} className="h-[204px] w-[204px] object-contain" />
+      <div className="mt-5 flex flex-col items-center gap-2.5">
+        <div className="rounded-[20px] border-2 border-son/15 bg-white p-4 shadow-card">
+          <Image src={intent.qrUrl} width={268} height={268} alt={`VietQR ${intent.txRef}`} className="h-[268px] w-[268px] object-contain" />
         </div>
-        <div className="space-y-2">
-          <PaymentRow label="Số tiền" value={`${currency.format(intent.amountVnd)}đ`} copy={() => onCopy("amount", String(intent.amountVnd))} copied={copied === "amount"} />
-          <PaymentRow label="Ngân hàng" value={intent.bankId} />
-          <PaymentRow label="Số tài khoản" value={intent.accountNo} copy={() => onCopy("account", intent.accountNo)} copied={copied === "account"} />
-          <PaymentRow label="Tên tài khoản" value={intent.accountName} />
-          <PaymentRow label="Nội dung" value={intent.transferDescription} copy={() => onCopy("description", intent.transferDescription)} copied={copied === "description"} />
-        </div>
+        <p className="text-center text-xs font-semibold text-inkSoft">📱 Quét bằng app ngân hàng bất kỳ hoặc ví hỗ trợ VietQR</p>
       </div>
 
-      <div className="mt-5 rounded-[10px] bg-ngheXsoft px-4 py-3 text-sm leading-6 text-ngheDeep">
-        Mã <strong>{intent.txRef}</strong> có hiệu lực đến {expiresAt}. Trạng thái hiện tại: <strong>Chờ ngân hàng xác nhận</strong>.
+      <div className="mt-5 grid gap-2.5 sm:grid-cols-2">
+        <PaymentRow
+          label="Số tiền"
+          value={`${currency.format(intent.amountVnd)}đ`}
+          copy={() => onCopy("amount", String(intent.amountVnd))}
+          copied={copied === "amount"}
+          emphasize
+        />
+        <PaymentRow label="Ngân hàng" value={intent.bankId} mono={false} />
+        <PaymentRow label="Số tài khoản" value={intent.accountNo} copy={() => onCopy("account", intent.accountNo)} copied={copied === "account"} />
+        <PaymentRow label="Tên tài khoản" value={intent.accountName} mono={false} />
+        <PaymentRow
+          label="Nội dung chuyển khoản"
+          value={intent.transferDescription}
+          copy={() => onCopy("description", intent.transferDescription)}
+          copied={copied === "description"}
+          className="sm:col-span-2"
+        />
+      </div>
+
+      <div className="mt-5 rounded-[10px] border border-nghe/25 bg-ngheXsoft px-4 py-3 text-sm leading-6 text-ngheDeep">
+        Mã <strong className="font-mono">{intent.txRef}</strong> có hiệu lực đến {expiresAt}. Trạng thái hiện tại: <strong>Chờ ngân hàng xác nhận</strong>.
       </div>
       <div className="mt-5 flex flex-col gap-2 sm:flex-row">
         {isAuthenticated ? <Link href="/account" className="button-primary flex-1 text-center">Xem lịch sử giao dịch</Link> : <button type="button" onClick={onClose} className="button-primary flex-1">Đóng</button>}
@@ -265,13 +279,59 @@ function DonationPaymentStep({
   );
 }
 
-function PaymentRow({ label, value, copy, copied = false }: { label: string; value: string; copy?: () => void; copied?: boolean }) {
+function PaymentRow({
+  label,
+  value,
+  copy,
+  copied = false,
+  emphasize = false,
+  mono = true,
+  className = "",
+}: {
+  label: string;
+  value: string;
+  copy?: () => void;
+  copied?: boolean;
+  emphasize?: boolean;
+  mono?: boolean;
+  className?: string;
+}) {
   return (
-    <div className="rounded-[8px] bg-paper px-3 py-2.5">
-      <div className="text-[10px] uppercase tracking-wide text-inkSoft">{label}</div>
-      <div className="mt-0.5 flex items-start justify-between gap-2">
-        <strong className="break-all text-sm text-chamDeep">{value}</strong>
-        {copy ? <button type="button" onClick={copy} className="shrink-0 text-[11px] font-bold text-sky hover:underline">{copied ? "Đã chép" : "Sao chép"}</button> : null}
+    <div
+      className={`rounded-[10px] border px-4 py-3 ${
+        emphasize ? "border-son/30 bg-sonSoft" : "border-line bg-white"
+      } ${className}`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-[11px] font-bold uppercase tracking-wide text-inkSoft">{label}</div>
+          <div
+            className={`mt-1 break-all font-bold ${mono ? "font-mono" : ""} ${
+              emphasize ? "text-xl text-son" : "text-base text-chamDeep"
+            }`}
+          >
+            {value}
+          </div>
+        </div>
+        {copy ? (
+          <button
+            type="button"
+            onClick={copy}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+              copied ? "bg-lua text-white" : "bg-paper text-sky hover:bg-sky/15"
+            }`}
+          >
+            {copied ? (
+              <>
+                <span aria-hidden>✓</span> Đã chép
+              </>
+            ) : (
+              <>
+                <span aria-hidden>⧉</span> Sao chép
+              </>
+            )}
+          </button>
+        ) : null}
       </div>
     </div>
   );

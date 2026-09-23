@@ -167,6 +167,8 @@ export async function createOrganizationCampaign(formData: FormData): Promise<Or
 
   const slug = slugify(title);
   const { error } = await supabase.from("campaigns").insert({
+    owner_type: "organization",
+    owner_user_id: null,
     organization_id: organization.id,
     title,
     slug,

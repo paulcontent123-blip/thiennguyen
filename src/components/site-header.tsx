@@ -33,6 +33,7 @@ export async function SiteHeader() {
   }
   const roleLinks = [
     ...(role === "org" ? [["Quản lý tổ chức", "/organization"]] : []),
+    ...(role === "donor" ? [["Chiến dịch cá nhân", "/personal-campaigns"]] : []),
     ...(role === "rescue_team" || role === "admin" ? [["Điều phối cứu trợ", "/rescue/operations"]] : []),
     ...(role === "admin" ? [["Admin", "/admin"]] : []),
   ] as const;

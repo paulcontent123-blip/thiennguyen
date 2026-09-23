@@ -26,7 +26,7 @@ function donationErrorMessage(message: string) {
   if (message.includes("DONATION_EMAIL_INVALID")) return "Email nhận biên nhận không hợp lệ.";
   if (message.includes("DONATION_NAME_INVALID")) return "Tên người ủng hộ phải từ 2 đến 120 ký tự.";
   if (message.includes("CAMPAIGN_NOT_ACCEPTING_DONATIONS")) return "Chiến dịch hiện không mở nhận ủng hộ.";
-  if (message.includes("CAMPAIGN_PAYMENT_NOT_CONFIGURED")) return "Tổ chức chưa cấu hình tài khoản VietQR cho chiến dịch.";
+  if (message.includes("PLATFORM_RECEIVING_ACCOUNT_NOT_CONFIGURED")) return "Admin chưa cấu hình tài khoản nhận VND trung tâm.";
   if (message.includes("create_donation_intent")) return "Database chưa được cập nhật migration tạo giao dịch quyên góp.";
   return "Không thể tạo giao dịch ủng hộ lúc này. Vui lòng thử lại.";
 }

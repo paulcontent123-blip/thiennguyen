@@ -59,7 +59,7 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 function Timeline({ createdAt, publishedAt, status, updates }: { createdAt: string; publishedAt: string | null; status: string; updates: CampaignUpdate[] }) {
   return (
     <div className="mt-5 flex flex-col">
-      <TimelineItem icon="🏛️" title="Hồ sơ chiến dịch được tạo" date={formatDate(createdAt)} text="Thông tin chiến dịch đã được tổ chức gửi lên nền tảng." />
+      <TimelineItem icon="🏛️" title="Hồ sơ chiến dịch được tạo" date={formatDate(createdAt)} text="Thông tin chiến dịch đã được chủ chiến dịch gửi lên nền tảng." />
       <TimelineItem
         icon="✓"
         admin
@@ -77,7 +77,7 @@ function Timeline({ createdAt, publishedAt, status, updates }: { createdAt: stri
           text={update.location_text ? `${update.body} · ${update.location_text}` : update.body}
         />
       ))}
-      {updates.length === 0 ? <div className="rounded-[8px] bg-paper px-4 py-3 text-sm leading-6 text-inkSoft">Nhật ký cập nhật thực địa sẽ xuất hiện tại đây khi tổ chức bổ sung dữ liệu bàn giao, chứng từ hoặc hình ảnh GPS.</div> : null}
+      {updates.length === 0 ? <div className="rounded-[8px] bg-paper px-4 py-3 text-sm leading-6 text-inkSoft">Nhật ký cập nhật thực địa sẽ xuất hiện tại đây khi chủ chiến dịch bổ sung dữ liệu bàn giao, chứng từ hoặc hình ảnh GPS.</div> : null}
     </div>
   );
 }
@@ -124,7 +124,7 @@ function VideoPanel({ videos }: { videos: CampaignMedia[] }) {
       ) : (
         <div className="rounded-[8px] bg-paper px-4 py-5 text-sm text-inkSoft">Chưa có video công khai cho chiến dịch này.</div>
       )}
-      <div className="mt-4 rounded-[8px] bg-paper px-3 py-2.5 text-[13px] leading-6 text-inkMid">💡 Video được quản lý từ cổng tổ chức và chỉ hiển thị sau khi tổ chức đánh dấu công khai.</div>
+      <div className="mt-4 rounded-[8px] bg-paper px-3 py-2.5 text-[13px] leading-6 text-inkMid">💡 Video được quản lý bởi chủ chiến dịch hoặc Admin và chỉ hiển thị sau khi được đánh dấu công khai.</div>
     </div>
   );
 }
@@ -134,7 +134,7 @@ function ViralPanel({ title, poster, qrUrl }: { title: string; poster: CampaignM
     <div className="mt-5">
       <div className="rounded-[14px] bg-gradient-to-br from-son to-[#D4514A] p-5 text-white">
         <div className="font-serif text-xl">🎈 Viral Kit - Chia sẻ để lan tỏa</div>
-        <p className="mt-1.5 text-[13.5px] leading-6 text-white/75">Poster 9:16 và mã VietQR được lấy từ nội dung đã được tổ chức cấu hình cho chiến dịch.</p>
+        <p className="mt-1.5 text-[13.5px] leading-6 text-white/75">Poster 9:16 lấy từ nội dung chiến dịch; VietQR được sinh theo giao dịch và tài khoản trung tâm do Admin VEA quản lý.</p>
         <div className="mt-4 flex items-center gap-3 rounded-[10px] bg-white/10 p-3">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[6px] bg-paper text-3xl">
             {poster ? <img src={poster.url} alt={poster.alt_text || title} className="h-full w-full object-cover" /> : "📷"}
@@ -145,7 +145,7 @@ function ViralPanel({ title, poster, qrUrl }: { title: string; poster: CampaignM
           </div>
         </div>
         {poster ? <a href={poster.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-sm font-bold text-son">⇩ Tải Poster 9:16</a> : <span className="mt-3 inline-flex rounded-full bg-white/70 px-4 py-2 text-sm font-bold text-son">⇩ Tải Poster 9:16 · Chưa có</span>}
-        {qrUrl ? <div className="mt-4 flex items-center gap-3 rounded-[10px] bg-white p-3 text-chamDeep"><img src={qrUrl} alt="VietQR của chiến dịch" className="h-28 w-28 rounded bg-white object-contain" /><div><div className="text-sm font-bold">VietQR động</div><div className="mt-1 text-xs text-inkSoft">QR được sinh theo cấu hình tài khoản của chiến dịch.</div></div></div> : null}
+        {qrUrl ? <div className="mt-4 flex items-center gap-3 rounded-[10px] bg-white p-3 text-chamDeep"><img src={qrUrl} alt="VietQR của chiến dịch" className="h-28 w-28 rounded bg-white object-contain" /><div><div className="text-sm font-bold">VietQR động</div><div className="mt-1 text-xs text-inkSoft">QR được sinh theo tài khoản trung tâm và mã giao dịch riêng.</div></div></div> : null}
       </div>
       <div className="mt-3 rounded-[8px] border border-dashed border-lineStrong bg-paper px-3 py-2.5 font-mono text-xs text-inkSoft">Schema.org LiveBlogPosting sẽ được render từ cấu hình SEO đã lưu.</div>
     </div>
@@ -184,4 +184,3 @@ export function CampaignShare({ title, compact = false, settings }: { title: str
     </div>
   );
 }
-

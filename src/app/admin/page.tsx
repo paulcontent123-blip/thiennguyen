@@ -4,14 +4,18 @@ import { requirePageRole } from "@/lib/auth/server";
 export default async function AdminPage() {
   const { supabase } = await requirePageRole(["admin"], "/admin");
 
-  const [campaignsRes, organizationsRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes] = await Promise.all([
+  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes] = await Promise.all([
     supabase
       .from("campaigns")
-      .select("id, title, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
+      .select("id, title, owner_type, owner_user_id, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
       .order("created_at", { ascending: false }),
     supabase
       .from("organizations")
       .select("id, name, legal_representative_name, license_status, license_number, license_note, license_file_path, created_at")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("personal_profiles")
+      .select("user_id, legal_name, phone, verification_status, verification_document_path, verification_note, verified_at, created_at")
       .order("created_at", { ascending: false }),
     supabase
       .from("disbursements")
@@ -37,17 +41,37 @@ export default async function AdminPage() {
       .from("sos_reports")
       .select("id, location_text, description, needs, contact_phone, status, photo_url, created_at")
       .order("created_at", { ascending: false }),
+    supabase
+      .from("platform_receiving_accounts")
+      .select("id, kind, currency, provider, bank_id, bank_name, account_no, account_name, swift_code, iban, qr_image_url, transfer_description_template, is_active, updated_at")
+      .order("kind", { ascending: true }),
+    supabase
+      .from("transactions")
+      .select(
+        "id, tx_ref, amount_vnd, currency, status, donor_name, receipt_email, transfer_description, receiving_bank_id, receiving_account_no, receiving_account_name, failure_reason, created_at, expires_at, completed_at, campaigns(title, slug)"
+      )
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
+
+  const personalProfiles = await Promise.all((personalProfilesRes.data ?? []).map(async (profile) => {
+    if (!profile.verification_document_path) return { ...profile, document_url: null };
+    const { data } = await supabase.storage.from("personal-verification").createSignedUrl(profile.verification_document_path, 300);
+    return { ...profile, document_url: data?.signedUrl ?? null };
+  }));
 
   return (
     <AdminPortal
       campaigns={campaignsRes.data ?? []}
       organizations={organizationsRes.data ?? []}
+      personalProfiles={personalProfiles}
       disbursements={disbursementsRes.data ?? []}
       rescueApplications={rescueApplicationsRes.data ?? []}
       rescueTeams={rescueTeamsRes.data ?? []}
       rescueInvitations={rescueInvitationsRes.data ?? []}
       sosReports={sosReportsRes.data ?? []}
+      receivingAccounts={receivingAccountsRes.data ?? []}
+      transactions={transactionsRes.data ?? []}
     />
   );
 }

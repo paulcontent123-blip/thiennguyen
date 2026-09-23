@@ -4,25 +4,106 @@ import { CampaignCard, type CampaignCardData } from "@/components/campaign-card"
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
-async function getActiveCampaigns(): Promise<CampaignCardData[]> {
+type CampaignOwnerType = "organization" | "individual";
+
+type HomepageStats = {
+  verifiedOrganizationCount: number;
+  verifiedPersonalProfileCount: number;
+  publicCampaignCount: number;
+  memberCount: number;
+  completedDonationCount: number;
+  totalReceivedVnd: number;
+};
+
+async function getCampaigns(ownerType?: CampaignOwnerType): Promise<CampaignCardData[]> {
   if (!hasSupabaseEnv()) return [];
 
   const supabase = createClient();
-  const { data } = await supabase
+  let campaignsQuery = supabase
     .from("campaigns")
-    .select("slug, title, summary, target_amount, category, owner_type")
+    .select("id, slug, title, summary, target_amount, category, province, owner_type")
     .eq("status", "active")
     .order("published_at", { ascending: false })
-    .limit(8);
+    .limit(ownerType === "individual" ? 4 : 8);
 
-  return (data ?? []).map((row) => ({
+  if (ownerType) campaignsQuery = campaignsQuery.eq("owner_type", ownerType);
+
+  const { data, error } = await campaignsQuery;
+  if (error) {
+    console.error("Failed to load homepage campaigns", error);
+    return [];
+  }
+
+  const rows = data ?? [];
+  if (rows.length === 0) return [];
+
+  const campaignIds = rows.map((row) => row.id);
+  const { data: media, error: mediaError } = await supabase
+    .from("campaign_media")
+    .select("campaign_id, url, thumbnail_url")
+    .in("campaign_id", campaignIds)
+    .eq("media_type", "cover")
+    .eq("is_public", true)
+    .order("sort_order", { ascending: true });
+
+  if (mediaError) console.warn("Homepage campaign covers are unavailable", mediaError.code);
+  const coverByCampaign = new Map<string, string>();
+  for (const item of media ?? []) {
+    if (!coverByCampaign.has(item.campaign_id)) coverByCampaign.set(item.campaign_id, item.thumbnail_url || item.url);
+  }
+
+  const summaries = await Promise.all(rows.map(async (row) => {
+    const { data: summary, error: summaryError } = await supabase.rpc("get_campaign_donation_summary", { p_campaign_id: row.id });
+    if (summaryError) {
+      console.warn("Homepage campaign summary is unavailable", { campaignId: row.id, code: summaryError.code });
+      return [row.id, 0] as const;
+    }
+    const summaryRow = Array.isArray(summary) ? summary[0] : summary;
+    return [row.id, Number(summaryRow?.total_amount_vnd ?? 0)] as const;
+  }));
+  const receivedByCampaign = new Map(summaries);
+
+  return rows.map((row) => ({
+    id: row.id,
     slug: row.slug,
     title: row.title,
     summary: row.summary,
     targetAmount: Number(row.target_amount),
     category: row.category,
+    province: row.province,
     ownerType: row.owner_type,
+    coverUrl: coverByCampaign.get(row.id) ?? null,
+    receivedAmount: receivedByCampaign.get(row.id) ?? 0,
   }));
+}
+
+async function getHomepageStats(): Promise<HomepageStats> {
+  const emptyStats: HomepageStats = {
+    verifiedOrganizationCount: 0,
+    verifiedPersonalProfileCount: 0,
+    publicCampaignCount: 0,
+    memberCount: 0,
+    completedDonationCount: 0,
+    totalReceivedVnd: 0,
+  };
+  if (!hasSupabaseEnv()) return emptyStats;
+
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("get_homepage_stats");
+  if (error) {
+    console.warn("Homepage statistics are unavailable", error.code);
+    return emptyStats;
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    verifiedOrganizationCount: Number(row?.verified_organization_count ?? 0),
+    verifiedPersonalProfileCount: Number(row?.verified_personal_profile_count ?? 0),
+    publicCampaignCount: Number(row?.public_campaign_count ?? 0),
+    memberCount: Number(row?.member_count ?? 0),
+    completedDonationCount: Number(row?.completed_donation_count ?? 0),
+    totalReceivedVnd: Number(row?.total_received_vnd ?? 0),
+  };
 }
 
 const currency = new Intl.NumberFormat("vi-VN");
@@ -32,15 +113,6 @@ const partners = [
   ["\u{1F3E6}", "Vietcombank"],
   ["❤️", "Hội Chữ thập đỏ VN"],
   ["\u{1F3EB}", "UNICEF Việt Nam"],
-] as const;
-
-const stats = [
-  ["Tổ chức", "0", "bg-sky"],
-  ["Cá nhân", "0", "bg-nghe"],
-  ["Chiến dịch", "0", "bg-son"],
-  ["Thành viên", "0", "bg-lua"],
-  ["Lượt ủng hộ", "0", "bg-nghe"],
-  ["Số tiền (tỷ)", "0", "bg-sky"],
 ] as const;
 
 const networkNodes = [
@@ -65,12 +137,21 @@ const howSteps = [
 ] as const;
 
 export default async function HomePage() {
-  const campaigns = await getActiveCampaigns();
+  const [campaigns, personalCampaigns, homepageStats] = await Promise.all([
+    getCampaigns(),
+    getCampaigns("individual"),
+    getHomepageStats(),
+  ]);
   const [heroMain, ...heroRest] = campaigns;
   const heroSub = heroRest.slice(0, 2);
-  const personalCampaigns = campaigns
-    .filter((campaign) => campaign.ownerType === "individual")
-    .slice(0, 4);
+  const stats = [
+    ["Tổ chức", homepageStats.verifiedOrganizationCount.toLocaleString("vi-VN"), "bg-sky"],
+    ["Cá nhân", homepageStats.verifiedPersonalProfileCount.toLocaleString("vi-VN"), "bg-nghe"],
+    ["Chiến dịch", homepageStats.publicCampaignCount.toLocaleString("vi-VN"), "bg-son"],
+    ["Thành viên", homepageStats.memberCount.toLocaleString("vi-VN"), "bg-lua"],
+    ["Lượt ủng hộ", homepageStats.completedDonationCount.toLocaleString("vi-VN"), "bg-nghe"],
+    ["Số tiền (tỷ)", (homepageStats.totalReceivedVnd / 1_000_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 }), "bg-sky"],
+  ] as const;
 
   return (
     <main>
@@ -80,6 +161,7 @@ export default async function HomePage() {
       <section className="mx-auto grid max-w-[1160px] grid-cols-1 gap-4 px-7 pt-7 md:grid-cols-[1.6fr_1fr]">
         {heroMain ? (
           <Link href={`/campaigns/${encodeURIComponent(heroMain.slug)}`} className="group relative flex h-[420px] flex-col justify-end overflow-hidden rounded-[14px] bg-gradient-to-br from-[#5C3317] to-[#8B4513] p-7 text-white">
+            {heroMain.coverUrl ? <div className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-105" style={{ backgroundImage: `url("${heroMain.coverUrl}")` }} /> : null}
             <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
             <div className="relative">
               <span className="inline-block rounded-[4px] bg-white/15 px-2.5 py-1 text-xs font-bold">Chiến dịch nổi bật</span>
@@ -108,6 +190,7 @@ export default async function HomePage() {
             const c = heroSub[i];
             return c ? (
               <Link key={c.slug} href={`/campaigns/${encodeURIComponent(c.slug)}`} className="group relative flex h-[198px] flex-col justify-end overflow-hidden rounded-[14px] bg-gradient-to-br from-[#1a4a2e] to-[#2d7a4a] p-5 text-white">
+                {c.coverUrl ? <div className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-105" style={{ backgroundImage: `url("${c.coverUrl}")` }} /> : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
                 <div className="relative">
                   <h3 className="font-serif text-base font-semibold leading-snug">{c.title}</h3>

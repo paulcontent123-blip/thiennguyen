@@ -8,6 +8,7 @@ export type HomepageStats = {
   memberCount: number;
   completedDonationCount: number;
   totalReceivedVnd: number;
+  donorCount: number;
 };
 
 export async function getHomepageStats(): Promise<HomepageStats> {
@@ -18,6 +19,7 @@ export async function getHomepageStats(): Promise<HomepageStats> {
     memberCount: 0,
     completedDonationCount: 0,
     totalReceivedVnd: 0,
+    donorCount: 0,
   };
   if (!hasSupabaseEnv()) return emptyStats;
 
@@ -36,5 +38,6 @@ export async function getHomepageStats(): Promise<HomepageStats> {
     memberCount: Number(row?.member_count ?? 0),
     completedDonationCount: Number(row?.completed_donation_count ?? 0),
     totalReceivedVnd: Number(row?.total_received_vnd ?? 0),
+    donorCount: Number(row?.donor_count ?? 0),
   };
 }

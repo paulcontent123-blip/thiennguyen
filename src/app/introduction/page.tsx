@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
+import { CorporateInquiryModal } from "@/components/corporate/corporate-inquiry-modal";
 import { getHomepageStats } from "@/lib/stats/homepage-stats";
 
 const currency = new Intl.NumberFormat("vi-VN");
@@ -34,16 +35,47 @@ const legalBasis = [
   },
   {
     icon: "🔒",
-    id: "privacy",
+    id: "decree-13",
     title: "Nghị định 13/2023/NĐ-CP",
     body: "Bảo vệ dữ liệu cá nhân. Số điện thoại, CCCD người thụ hưởng phải được che mờ. Hệ thống không lưu giữ thông tin thẻ/tài khoản ngân hàng của nhà hảo tâm.",
   },
   {
     icon: "🛡️",
-    id: "terms",
+    id: "data-security",
     title: "Kiểm soát truy cập ở tầng dữ liệu",
     body: "Mọi thao tác ghi/sửa dữ liệu (duyệt chiến dịch, xác nhận giao dịch, hậu kiểm giải ngân) đều qua Row-Level Security và guard trigger theo vai trò — không chỉ kiểm soát ở giao diện.",
   },
+] as const;
+
+const roadmapDone = [
+  "Cashflow Tree công khai trên từng chiến dịch",
+  "VietQR động với mã giao dịch riêng cho mỗi lượt ủng hộ",
+  "Admin đối soát từng giao dịch trước khi ghi nhận thành công",
+  "Hậu kiểm giải ngân kèm tệp bằng chứng",
+  "Bản đồ SOS và điều phối đội cứu trợ",
+  "Không thu phí nền tảng",
+] as const;
+
+const roadmapPlanned = [
+  "Webhook ngân hàng để xác nhận giao dịch tự động",
+  "Biên nhận điện tử PDF gửi qua email",
+  "Xác minh ảnh SOS bằng dữ liệu vị trí (EXIF) và chấm điểm tin cậy",
+  "Báo cáo ESG và xuất hồ sơ tác động cho doanh nghiệp",
+  "Đóng góp hiện vật, ngày công và Matching Fund gắn dữ liệu thật",
+] as const;
+
+const termsSummary = [
+  "Ủng hộ được chuyển vào tài khoản trung tâm của VEA Group qua VietQR, nền tảng không thu phí.",
+  "Giao dịch ở trạng thái chờ cho đến khi Admin đối soát khớp sao kê ngân hàng.",
+  "Chiến dịch chỉ hiển thị công khai sau khi Admin duyệt và chủ sở hữu đã được xác minh.",
+  "Báo cáo SOS phải trung thực và kèm ảnh hiện trường thực tế.",
+] as const;
+
+const privacySummary = [
+  "Thu thập: họ tên, email, số điện thoại (khi cần liên hệ), thông tin giao dịch, ảnh và vị trí trong báo cáo SOS, giấy tờ xác minh.",
+  "Không lưu thông tin thẻ hoặc tài khoản ngân hàng của nhà hảo tâm.",
+  "Giấy tờ xác minh cá nhân được lưu ở kho riêng tư, chỉ Admin xem được.",
+  "Dữ liệu được xử lý qua các dịch vụ hạ tầng: Supabase (cơ sở dữ liệu), Cloudinary (tệp ảnh) và dịch vụ gửi email.",
 ] as const;
 
 export default async function IntroductionPage() {
@@ -52,7 +84,7 @@ export default async function IntroductionPage() {
   const statCards = [
     ["VND đã ghi nhận", `${(stats.totalReceivedVnd / 1_000_000).toLocaleString("vi-VN", { maximumFractionDigits: 1 })} triệu`, "text-son"],
     ["Chiến dịch công khai", currency.format(stats.publicCampaignCount), "text-chamDeep"],
-    ["Thành viên", currency.format(stats.memberCount), "text-chamDeep"],
+    ["Nhà hảo tâm đã ủng hộ", currency.format(stats.donorCount), "text-chamDeep"],
     ["Tổ chức đã xác minh", currency.format(stats.verifiedOrganizationCount), "text-chamDeep"],
     ["Phí nền tảng", "0%", "text-lua"],
   ] as const;
@@ -125,6 +157,26 @@ export default async function IntroductionPage() {
           </div>
         </div>
 
+        {/* ĐÃ CÓ / ĐANG PHÁT TRIỂN */}
+        <div className="mt-16">
+          <p className="eyebrow">Hiện trạng nền tảng</p>
+          <h3 className="mt-2 font-serif text-xl font-semibold text-chamDeep sm:text-2xl">Điều đã hoạt động và điều đang xây dựng</h3>
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <div className="rounded-[14px] border border-lua/30 bg-white p-6">
+              <div className="text-sm font-bold text-lua">✓ Đã hoạt động</div>
+              <ul className="mt-3 flex flex-col gap-2 text-sm text-inkMid">
+                {roadmapDone.map((item) => <li key={item} className="flex gap-2"><span className="font-bold text-lua">✓</span>{item}</li>)}
+              </ul>
+            </div>
+            <div className="rounded-[14px] border border-nghe/40 bg-white p-6">
+              <div className="text-sm font-bold text-ngheDeep">◷ Đang phát triển</div>
+              <ul className="mt-3 flex flex-col gap-2 text-sm text-inkMid">
+                {roadmapPlanned.map((item) => <li key={item} className="flex gap-2"><span className="font-bold text-ngheDeep">◷</span>{item}</li>)}
+              </ul>
+            </div>
+          </div>
+        </div>
+
         {/* PHÁP LÝ */}
         <div className="mt-16 rounded-[20px] bg-paper p-7 sm:p-9">
           <p className="eyebrow">Cơ sở pháp lý</p>
@@ -140,6 +192,24 @@ export default async function IntroductionPage() {
           </div>
         </div>
 
+        {/* TÓM TẮT ĐIỀU KHOẢN & BẢO MẬT */}
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <div id="terms" className="scroll-mt-24 rounded-[14px] border border-line bg-white p-6">
+            <h3 className="font-serif text-lg font-semibold text-chamDeep">Điều khoản sử dụng (tóm tắt)</h3>
+            <ul className="mt-3 flex flex-col gap-2 text-sm leading-6 text-inkMid">
+              {termsSummary.map((item) => <li key={item} className="flex gap-2"><span className="text-son">•</span>{item}</li>)}
+            </ul>
+            <p className="mt-3 text-xs leading-5 text-inkSoft">Đây là bản tóm tắt để tham khảo, không thay thế văn bản điều khoản đầy đủ đang được hoàn thiện.</p>
+          </div>
+          <div id="privacy" className="scroll-mt-24 rounded-[14px] border border-line bg-white p-6">
+            <h3 className="font-serif text-lg font-semibold text-chamDeep">Chính sách bảo mật (tóm tắt)</h3>
+            <ul className="mt-3 flex flex-col gap-2 text-sm leading-6 text-inkMid">
+              {privacySummary.map((item) => <li key={item} className="flex gap-2"><span className="text-son">•</span>{item}</li>)}
+            </ul>
+            <p className="mt-3 text-xs leading-5 text-inkSoft">Đây là bản tóm tắt để tham khảo, không thay thế chính sách đầy đủ đang được hoàn thiện.</p>
+          </div>
+        </div>
+
         {/* CONTACT + MEDIA */}
         <div className="mt-16 grid gap-5 lg:grid-cols-2">
           <div className="rounded-[14px] bg-chamDeep p-7 text-white">
@@ -149,9 +219,12 @@ export default async function IntroductionPage() {
               <div>📍 Tòa nhà VEA Group</div>
               <div>🌐 thiennguyen.com.vn</div>
             </div>
-            <Link href="/corporate" className="mt-5 inline-flex rounded-[40px] bg-son px-5 py-2.5 text-sm font-bold text-white transition hover:bg-son/90">
-              Đăng ký đồng hành
-            </Link>
+            <div className="mt-5">
+              <CorporateInquiryModal
+                triggerClassName="inline-flex rounded-[40px] bg-son px-5 py-2.5 text-sm font-bold text-white transition hover:bg-son/90"
+                triggerLabel="Đăng ký đồng hành"
+              />
+            </div>
           </div>
           <div className="rounded-[14px] border border-line bg-white p-7">
             <div className="font-serif text-lg text-chamDeep">Báo chí &amp; Truyền thông</div>

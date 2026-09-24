@@ -15,6 +15,7 @@ const navItems: { key: AdminPanelKey; icon: string; label: string }[] = [
   { key: "donations", icon: "🧾", label: "Đối soát quyên góp" },
   { key: "corporate", icon: "🤝", label: "Yêu cầu doanh nghiệp" },
   { key: "disbursement", icon: "💰", label: "Hậu kiểm giải ngân" },
+  { key: "resources", icon: "📦", label: "Duyệt nguồn lực" },
   { key: "sos", icon: "📍", label: "SOS Reports" },
 ];
 

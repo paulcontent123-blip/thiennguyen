@@ -12,6 +12,7 @@ import {
   claimResourceNeed,
   type ResourceActionResult,
 } from "@/app/donate-items/actions";
+import { OwnResources } from "@/components/donate-items/own-resources";
 
 export type ResourceType = "item" | "skill" | "transport";
 
@@ -27,11 +28,14 @@ export type ResourceNeed = {
   province: string | null;
   urgency: "normal" | "urgent";
   status: string;
+  moderation_status?: string;
+  review_note?: string | null;
   created_at: string;
   campaign_title: string;
   campaign_slug: string;
   campaign_province: string | null;
   claimed_quantity: number;
+  committed_quantity?: number;
 };
 
 export type ResourceOffer = {
@@ -47,6 +51,9 @@ export type ResourceOffer = {
   radius_km: number | null;
   status?: string;
   matched_need_id?: string | null;
+  contact_name?: string;
+  contact_email?: string;
+  contact_phone?: string | null;
   created_at: string;
 };
 
@@ -59,6 +66,7 @@ export type ResourceClaim = {
   expires_at: string | null;
   coordination_note: string | null;
   actual_value_vnd: number | null;
+  confirmed_at?: string | null;
   created_at: string;
   need_name: string;
   need_unit: string;
@@ -103,7 +111,7 @@ const typeLabels: Record<ResourceType, string> = { item: "Hiện vật", skill: 
 const typeIcons: Record<ResourceType, string> = { item: "📦", skill: "🤝", transport: "🚚" };
 const statusLabels: Record<string, string> = {
   available: "Sẵn sàng", matched: "Đã ghép", delivered: "Đã bàn giao", cancelled: "Đã hủy",
-  reserved: "Giữ chỗ", confirmed: "Đã xác nhận", expired: "Hết hạn", failed: "Không thành công",
+  reserved: "Chờ Admin xác minh ghép", confirmed: "Đã xác minh ghép", expired: "Hết hạn", failed: "Không thành công",
   open: "Đang nhận", fulfilled: "Đã đủ", closed: "Đã đóng",
 };
 const field = "w-full rounded-[8px] border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-son";
@@ -195,7 +203,7 @@ export function DonateItemsPortal(props: Props) {
 
         <div id="register-resource" className="scroll-mt-24 rounded-[14px] border border-line bg-white p-6">
           <h2 className="font-serif text-xl font-semibold text-chamDeep">🎁 Tôi có nguồn lực muốn đóng góp</h2>
-          <p className="mt-1 text-sm text-inkMid">Thông tin liên hệ chỉ hiển thị cho bạn, Admin và chủ chiến dịch sau khi ghép.</p>
+          <p className="mt-1 text-sm text-inkMid">Thông tin liên hệ chỉ hiển thị cho bạn và Admin để xác minh, điều phối lượt đóng góp.</p>
           {!props.isAuthenticated ? (
             <div className="mt-4 rounded-[8px] bg-paperMid p-4 text-sm text-inkMid">Bạn cần <Link href="/login?next=%2Fdonate-items" className="font-bold text-son">đăng nhập</Link> để lưu nguồn lực và theo dõi bàn giao.</div>
           ) : (
@@ -254,7 +262,8 @@ export function DonateItemsPortal(props: Props) {
           <div className="mt-5 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {visibleNeeds.map((need) => {
               const claimed = Number(need.claimed_quantity);
-              const remaining = Math.max(0, Number(need.quantity_needed) - claimed);
+              const committed = Number(need.committed_quantity ?? claimed);
+              const remaining = Math.max(0, Number(need.quantity_needed) - committed);
               const percent = Math.min(100, Math.round((claimed / Number(need.quantity_needed)) * 100));
               return <article key={need.id} className="overflow-hidden rounded-[14px] border border-line bg-white">
                 <div className="h-1.5 bg-paperDeep"><div className="h-full bg-lua" style={{ width: `${percent}%` }} /></div>
@@ -264,7 +273,7 @@ export function DonateItemsPortal(props: Props) {
                   <h3 className="mt-1 font-serif text-lg font-semibold text-chamDeep">{need.name}</h3>
                   <p className="mt-1 line-clamp-2 text-sm leading-6 text-inkMid">{need.description || "Chưa có mô tả chi tiết."}</p>
                   <p className="mt-2 text-xs text-inkSoft">📍 {need.province || need.campaign_province || "Chưa xác định"}</p>
-                  <p className="mt-3 text-sm"><strong>{number.format(claimed)} / {number.format(need.quantity_needed)} {need.unit}</strong> đã được giữ/nhận</p>
+                  <p className="mt-3 text-sm"><strong>{number.format(claimed)} / {number.format(need.quantity_needed)} {need.unit}</strong> đã bàn giao và Admin xác minh{committed > claimed ? <span className="block text-xs text-inkSoft">{number.format(committed - claimed)} đang chờ xác minh</span> : null}</p>
                   <button type="button" disabled={remaining <= 0 || need.status !== "open"} onClick={() => setSelectedNeed(need)} className="button-primary mt-4 w-full disabled:cursor-not-allowed disabled:opacity-50">{remaining > 0 ? `Đóng góp (còn ${number.format(remaining)} ${need.unit})` : "Đã đủ nhu cầu"}</button>
                 </div>
               </article>;
@@ -275,7 +284,7 @@ export function DonateItemsPortal(props: Props) {
         <div className="mt-12">
           <p className="eyebrow">Nguồn lực sẵn sàng</p>
           <h2 className="mt-1 font-serif text-2xl font-semibold text-chamDeep">Cộng đồng đã đăng ký</h2>
-          <p className="mt-2 text-sm text-inkMid">Danh sách công khai không hiển thị email hay số điện thoại. Chủ chiến dịch ghép nguồn lực từ khu vực quản lý bên dưới.</p>
+          <p className="mt-2 text-sm text-inkMid">Danh sách công khai không hiển thị email hay số điện thoại. Admin sẽ rà soát và đề xuất ghép nguồn lực với nhu cầu đã duyệt.</p>
           <div className="mt-5 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {visibleOffers.length === 0 ? <p className="text-sm text-inkSoft">Chưa có nguồn lực sẵn sàng.</p> : visibleOffers.map((offer) => <article key={offer.id} className="rounded-[14px] border border-line bg-white p-4">
               <div className="flex items-center justify-between"><span className="text-2xl">{typeIcons[offer.resource_type]}</span><span className="text-[11px] font-bold text-lua">{typeLabels[offer.resource_type]}</span></div>
@@ -287,7 +296,7 @@ export function DonateItemsPortal(props: Props) {
           </div>
         </div>
 
-        {props.isAuthenticated ? <AccountResources {...props} pending={pending} run={run} /> : null}
+        {props.isAuthenticated ? <AccountResources {...props} /> : null}
 
       </section>
 
@@ -296,12 +305,12 @@ export function DonateItemsPortal(props: Props) {
           <input type="hidden" name="needId" value={selectedNeed.id} />
           <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-bold text-lua">{selectedNeed.campaign_title}</p><h2 className="mt-1 font-serif text-xl font-semibold text-chamDeep">Đăng ký: {selectedNeed.name}</h2></div><button type="button" onClick={() => setSelectedNeed(null)} className="text-xl text-inkSoft">×</button></div>
           {!props.isAuthenticated ? <p className="mt-5 rounded-[8px] bg-paperMid p-4 text-sm">Bạn cần <Link href="/login?next=%2Fdonate-items" className="font-bold text-son">đăng nhập</Link> để đăng ký.</p> : <div className="mt-5 grid gap-3">
-            <label className={label}>Số lượng ({selectedNeed.unit})<input className={field} name="quantity" type="number" min="0.01" max={Math.max(0, selectedNeed.quantity_needed - selectedNeed.claimed_quantity)} step="0.01" required /></label>
+            <label className={label}>Số lượng ({selectedNeed.unit})<input className={field} name="quantity" type="number" min="0.01" max={Math.max(0, selectedNeed.quantity_needed - Number(selectedNeed.committed_quantity ?? selectedNeed.claimed_quantity))} step="0.01" required /></label>
             <label className={label}>Dùng nguồn lực đã đăng ký (không bắt buộc)<select className={field} name="offerId"><option value="">Đăng ký trực tiếp cho nhu cầu này</option>{compatibleOwnOffers.map((offer) => <option key={offer.id} value={offer.id}>{offer.title} — {number.format(offer.quantity)} {offer.unit}</option>)}</select></label>
             <label className={label}>Người liên hệ<input className={field} name="contactName" defaultValue={props.defaultName} required /></label>
             <label className={label}>Email<input className={field} name="contactEmail" type="email" defaultValue={props.defaultEmail} required /></label>
             <label className={label}>Số điện thoại<input className={field} name="contactPhone" /></label>
-            <p className="rounded-[8px] bg-nghe/10 p-3 text-xs leading-5 text-ngheDeep">Đăng ký giữ chỗ trong 48 giờ. Nếu chưa được xác nhận, hệ thống sẽ trả số lượng về wishlist.</p>
+            <p className="rounded-[8px] bg-nghe/10 p-3 text-xs leading-5 text-ngheDeep">Đây là đăng ký đóng góp, chưa được tính vào tiến độ. Admin sẽ kiểm tra và xác minh ghép; tiến độ chỉ cập nhật sau khi bàn giao thực tế được xác nhận.</p>
             <button disabled={pending} className="button-primary">{pending ? "Đang xử lý..." : "Xác nhận đăng ký"}</button>
           </div>}
         </form>
@@ -310,12 +319,6 @@ export function DonateItemsPortal(props: Props) {
   );
 }
 
-function AccountResources(props: Props & { pending: boolean; run: (action: () => Promise<ResourceActionResult>) => void }) {
-  return <div className="mt-12 rounded-[14px] border border-line bg-white p-6">
-    <h2 className="font-serif text-xl font-semibold text-chamDeep">Nguồn lực và đăng ký của tôi</h2>
-    <div className="mt-5 grid gap-6 lg:grid-cols-2">
-      <div><h3 className="text-sm font-bold text-chamDeep">Nguồn lực đã đăng ({props.ownOffers.length})</h3><div className="mt-3 space-y-2">{props.ownOffers.length === 0 ? <p className="text-sm text-inkSoft">Chưa đăng nguồn lực nào.</p> : props.ownOffers.map((offer) => <div key={offer.id} className="rounded-[8px] bg-paper p-3 text-sm"><div className="flex justify-between gap-2"><strong>{offer.title}</strong><Status value={offer.status ?? "available"} /></div><p className="mt-1 text-xs text-inkSoft">{number.format(offer.quantity)} {offer.unit} · {typeLabels[offer.resource_type]}</p>{offer.status === "available" ? <button disabled={props.pending} type="button" onClick={() => props.run(() => cancelResourceOffer(offer.id))} className="mt-2 text-xs font-bold text-son">Hủy đăng ký</button> : null}</div>)}</div></div>
-      <div><h3 className="text-sm font-bold text-chamDeep">Lượt đóng góp ({props.ownClaims.length})</h3><div className="mt-3 space-y-2">{props.ownClaims.length === 0 ? <p className="text-sm text-inkSoft">Chưa nhận wishlist nào.</p> : props.ownClaims.map((claim) => <div key={claim.id} className="rounded-[8px] bg-paper p-3 text-sm"><div className="flex justify-between gap-2"><div><strong>{claim.need_name}</strong><p className="mt-1 text-xs text-inkSoft">{claim.campaign_title} · {number.format(claim.quantity)} {claim.need_unit}</p></div><Status value={claim.status} /></div>{claim.expires_at && claim.status === "reserved" ? <p className="mt-1 text-xs text-ngheDeep">Giữ chỗ đến {formatDate(claim.expires_at)}</p> : null}{claim.coordination_note ? <p className="mt-2 text-xs text-inkMid">Điều phối: {claim.coordination_note}</p> : null}{["reserved", "confirmed"].includes(claim.status) ? <button disabled={props.pending} type="button" onClick={() => props.run(() => cancelResourceClaim(claim.id))} className="mt-2 text-xs font-bold text-son">Hủy lượt đóng góp</button> : null}</div>)}</div></div>
-    </div>
-  </div>;
+function AccountResources(props: Props) {
+  return <OwnResources offers={props.ownOffers} claims={props.ownClaims} />;
 }

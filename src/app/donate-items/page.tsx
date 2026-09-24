@@ -18,7 +18,7 @@ export default async function DonateItemsPage() {
   const publicNeeds = (needsResult.data ?? []) as ResourceNeed[];
   const publicOffers = (offersResult.data ?? []) as ResourceOffer[];
   const loadError = needsResult.error || offersResult.error
-    ? "Chưa đọc được dữ liệu nguồn lực. Hãy bảo đảm migration 202609240006 đã được áp dụng."
+    ? "Chưa đọc được dữ liệu nguồn lực. Hãy bảo đảm các migration nguồn lực 202609240006 và 202609240010 đã được áp dụng."
     : null;
 
   let ownOffers: ResourceOffer[] = [];
@@ -29,13 +29,15 @@ export default async function DonateItemsPage() {
     const [ownOffersResult, ownClaimsResult] = await Promise.all([
       supabase
         .from("resource_offers")
-        .select("id, resource_type, title, description, quantity, unit, estimated_value_vnd, province, available_from, radius_km, status, created_at, matched_need_id")
+        .select("id, resource_type, title, description, quantity, unit, estimated_value_vnd, province, available_from, radius_km, status, created_at, matched_need_id, contact_name, contact_email, contact_phone")
         .eq("user_id", auth.user.id)
+        .eq("owner_hidden", false)
         .order("created_at", { ascending: false }),
       supabase
         .from("resource_claims")
-        .select("id, need_id, offer_id, quantity, status, expires_at, coordination_note, actual_value_vnd, created_at, resource_needs(name, unit, campaigns(title, slug))")
+        .select("id, need_id, offer_id, quantity, status, expires_at, coordination_note, actual_value_vnd, confirmed_at, created_at, resource_needs(name, unit, campaigns(title, slug))")
         .eq("contributor_id", auth.user.id)
+        .eq("owner_hidden", false)
         .order("created_at", { ascending: false }),
     ]);
     ownOffers = (ownOffersResult.data ?? []) as ResourceOffer[];
@@ -52,6 +54,7 @@ export default async function DonateItemsPage() {
         expires_at: item.expires_at ? String(item.expires_at) : null,
         coordination_note: item.coordination_note ? String(item.coordination_note) : null,
         actual_value_vnd: item.actual_value_vnd === null ? null : Number(item.actual_value_vnd),
+        confirmed_at: item.confirmed_at ? String(item.confirmed_at) : null,
         created_at: String(item.created_at),
         need_name: need?.name ?? "Nhu cầu nguồn lực",
         need_unit: need?.unit ?? "đơn vị",

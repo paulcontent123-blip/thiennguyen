@@ -6,7 +6,6 @@ import { requireActionRole } from "@/lib/auth/server";
 export type ResourceActionResult = { ok: true; message: string } | { ok: false; message: string };
 
 const RESOURCE_TYPES = ["item", "skill", "transport"] as const;
-const CLAIM_STATUSES = ["confirmed", "delivered", "cancelled", "failed"] as const;
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function text(formData: FormData, key: string) {
@@ -28,8 +27,12 @@ function databaseMessage(error: unknown) {
   if (message.includes("RESOURCE_NEED_NOT_AVAILABLE")) return "Nhu cầu này không còn nhận đăng ký.";
   if (message.includes("RESOURCE_OFFER_NOT_AVAILABLE")) return "Nguồn lực đã được ghép, bị hủy hoặc không đủ số lượng.";
   if (message.includes("RESOURCE_MATCH_FORBIDDEN")) return "Bạn không có quyền điều phối nhu cầu này.";
+  if (message.includes("RESOURCE_MATCH_ADMIN_ONLY")) return "Chỉ Admin được xác minh và ghép nguồn lực.";
   if (message.includes("INVALID_RESOURCE_CLAIM_TRANSITION")) return "Không thể chuyển sang trạng thái này từ trạng thái hiện tại.";
   if (message.includes("RESOURCE_OFFER_ALREADY_MATCHED")) return "Nguồn lực đã được ghép nên không thể sửa hoặc hủy trực tiếp.";
+  if (message.includes("RESOURCE_NEED_ADMIN_ONLY_REVIEW")) return "Nhu cầu đã có người đăng ký hoặc không còn mở nên không thể sửa.";
+  if (message.includes("RESOURCE_OFFER_HIDE_ONLY_CANCELLED")) return "Chỉ ẩn được nguồn lực đã hủy.";
+  if (message.includes("RESOURCE_CLAIM_ADMIN_ONLY_REVIEW")) return "Lượt này đã qua xác minh của Admin nên không thể ẩn.";
   return message || "Không thể thực hiện thao tác. Vui lòng thử lại.";
 }
 
@@ -141,7 +144,7 @@ export async function createResourceOffer(formData: FormData): Promise<ResourceA
     });
     if (error) return { ok: false, message: databaseMessage(error) };
     refreshResources();
-    return { ok: true, message: "Đã ghi nhận nguồn lực. Chủ chiến dịch có thể ghép nguồn lực với nhu cầu phù hợp." };
+    return { ok: true, message: "Đã ghi nhận nguồn lực. Admin sẽ kiểm tra và ghép với nhu cầu phù hợp nếu có." };
   } catch (error) {
     return { ok: false, message: databaseMessage(error) };
   }
@@ -199,7 +202,7 @@ export async function createResourceNeed(formData: FormData): Promise<ResourceAc
     });
     if (error) return { ok: false, message: databaseMessage(error) };
     refreshResources(campaign.slug);
-    return { ok: true, message: "Đã thêm nhu cầu vào wishlist của chiến dịch." };
+    return { ok: true, message: "Đã gửi nhu cầu để Admin xét duyệt. Nhu cầu chưa hiển thị công khai." };
   } catch (error) {
     return { ok: false, message: databaseMessage(error) };
   }
@@ -255,7 +258,7 @@ export async function claimResourceNeed(formData: FormData): Promise<ResourceAct
     });
     if (error) return { ok: false, message: databaseMessage(error) };
     refreshResources();
-    return { ok: true, message: "Đã giữ chỗ nguồn lực trong 48 giờ. Chủ chiến dịch sẽ liên hệ để xác nhận bàn giao." };
+    return { ok: true, message: "Đã gửi đăng ký đóng góp. Admin sẽ xác minh kết quả ghép; đăng ký này chưa được tính vào tiến độ." };
   } catch (error) {
     return { ok: false, message: databaseMessage(error) };
   }
@@ -281,58 +284,122 @@ export async function cancelResourceClaim(id: string): Promise<ResourceActionRes
   }
 }
 
-export async function matchResourceOffer(formData: FormData): Promise<ResourceActionResult> {
+export async function updateResourceOffer(id: string, formData: FormData): Promise<ResourceActionResult> {
   try {
-    const needId = text(formData, "needId");
-    const offerId = text(formData, "offerId");
+    const { supabase, user, role } = await requireActionRole(["donor", "org", "rescue_team", "admin"]);
+    const title = text(formData, "title");
+    const description = text(formData, "description");
     const quantity = positiveNumber(formData, "quantity");
-    const { supabase, campaign } = await requireNeedManager(needId);
-    if (!offerId || !quantity) return { ok: false, message: "Nguồn lực hoặc số lượng ghép chưa hợp lệ." };
-    const { error } = await supabase.rpc("match_resource_offer", {
-      p_offer_id: offerId,
-      p_need_id: needId,
-      p_quantity: quantity,
-    });
+    const unit = text(formData, "unit");
+    const province = text(formData, "province");
+    const availableFrom = text(formData, "availableFrom");
+    const contactName = text(formData, "contactName");
+    const contactEmail = text(formData, "contactEmail").toLowerCase();
+    const contactPhone = text(formData, "contactPhone");
+    const estimatedValue = text(formData, "estimatedValue");
+    const radius = text(formData, "radiusKm");
+
+    if (title.length < 2 || title.length > 180 || description.length > 2000 || !quantity || !unit || unit.length > 40) {
+      return { ok: false, message: "Tên, số lượng hoặc đơn vị nguồn lực chưa hợp lệ." };
+    }
+    if (contactName.length < 2 || contactName.length > 120 || !EMAIL_PATTERN.test(contactEmail)) {
+      return { ok: false, message: "Tên và email liên hệ chưa hợp lệ." };
+    }
+    if (contactPhone && (contactPhone.length < 8 || contactPhone.length > 30)) {
+      return { ok: false, message: "Số điện thoại liên hệ chưa hợp lệ." };
+    }
+    const estimatedValueVnd = estimatedValue ? Number(estimatedValue) : null;
+    const radiusKm = radius ? Number(radius) : null;
+    if (estimatedValueVnd !== null && (!Number.isFinite(estimatedValueVnd) || estimatedValueVnd < 0)) {
+      return { ok: false, message: "Giá trị quy đổi không hợp lệ." };
+    }
+    if (radiusKm !== null && (!Number.isInteger(radiusKm) || radiusKm < 1 || radiusKm > 2000)) {
+      return { ok: false, message: "Bán kính phục vụ phải từ 1 đến 2.000 km." };
+    }
+
+    let query = supabase.from("resource_offers").update({
+      title,
+      description,
+      quantity,
+      unit,
+      estimated_value_vnd: estimatedValueVnd,
+      province: province || null,
+      available_from: availableFrom || null,
+      radius_km: radiusKm,
+      contact_name: contactName,
+      contact_email: contactEmail,
+      contact_phone: contactPhone || null,
+    }).eq("id", id).eq("status", "available");
+    if (role !== "admin") query = query.eq("user_id", user.id);
+    const { data, error } = await query.select("id").maybeSingle();
     if (error) return { ok: false, message: databaseMessage(error) };
-    refreshResources(campaign.slug);
-    return { ok: true, message: "Đã ghép nguồn lực và xác nhận với người đóng góp." };
+    if (!data) return { ok: false, message: "Chỉ sửa được nguồn lực đang ở trạng thái Sẵn sàng (chưa ghép, chưa hủy)." };
+    refreshResources();
+    return { ok: true, message: "Đã cập nhật nguồn lực." };
   } catch (error) {
     return { ok: false, message: databaseMessage(error) };
   }
 }
 
-export async function updateResourceClaimStatus(id: string, formData: FormData): Promise<ResourceActionResult> {
+export async function updateResourceNeed(id: string, formData: FormData): Promise<ResourceActionResult> {
   try {
-    const status = text(formData, "status");
-    if (!CLAIM_STATUSES.includes(status as (typeof CLAIM_STATUSES)[number])) {
-      return { ok: false, message: "Trạng thái xử lý không hợp lệ." };
+    const { supabase, campaign } = await requireNeedManager(id);
+    const name = text(formData, "name");
+    const description = text(formData, "description");
+    const category = text(formData, "category");
+    const quantityNeeded = positiveNumber(formData, "quantityNeeded");
+    const unit = text(formData, "unit");
+    const province = text(formData, "province");
+    const urgency = text(formData, "urgency");
+    if (!quantityNeeded) return { ok: false, message: "Số lượng nhu cầu chưa hợp lệ." };
+    if (name.length < 2 || name.length > 180 || description.length > 2000 || !unit || unit.length > 40) {
+      return { ok: false, message: "Tên, mô tả hoặc đơn vị nhu cầu chưa hợp lệ." };
     }
-    const { supabase, user } = await requireActionRole(["donor", "org", "admin"]);
-    const { data: claim, error: claimError } = await supabase
-      .from("resource_claims")
-      .select("id, need_id")
-      .eq("id", id)
-      .maybeSingle();
-    if (claimError || !claim) return { ok: false, message: "Không tìm thấy lượt đăng ký nguồn lực." };
-    const { campaign } = await requireNeedManager(claim.need_id);
-    const coordinationNote = text(formData, "coordinationNote");
-    const actualValueRaw = text(formData, "actualValue");
-    const actualValue = actualValueRaw ? Number(actualValueRaw) : null;
-    if (coordinationNote.length > 1000 || (actualValue !== null && (!Number.isFinite(actualValue) || actualValue < 0))) {
-      return { ok: false, message: "Ghi chú hoặc giá trị thực tế không hợp lệ." };
-    }
-    const now = new Date().toISOString();
-    const { error } = await supabase.from("resource_claims").update({
-      status,
-      coordination_note: coordinationNote || null,
-      actual_value_vnd: actualValue,
-      processed_by: user.id,
-      ...(status === "confirmed" ? { confirmed_at: now } : {}),
-      ...(status === "delivered" ? { delivered_at: now } : {}),
-    }).eq("id", id);
+    if (!["normal", "urgent"].includes(urgency)) return { ok: false, message: "Mức độ ưu tiên không hợp lệ." };
+
+    const { data, error } = await supabase.from("resource_needs").update({
+      name,
+      description,
+      category: category || null,
+      quantity_needed: quantityNeeded,
+      unit,
+      province: province || null,
+      urgency,
+    }).eq("id", id).eq("status", "open").select("id").maybeSingle();
     if (error) return { ok: false, message: databaseMessage(error) };
+    if (!data) return { ok: false, message: "Nhu cầu đã đóng hoặc đã đủ nên không thể sửa." };
     refreshResources(campaign.slug);
-    return { ok: true, message: status === "delivered" ? "Đã xác nhận bàn giao nguồn lực." : "Đã cập nhật trạng thái đăng ký." };
+    return { ok: true, message: "Đã cập nhật nhu cầu. Nhu cầu quay lại trạng thái chờ Admin duyệt lại trước khi hiển thị công khai." };
+  } catch (error) {
+    return { ok: false, message: databaseMessage(error) };
+  }
+}
+
+export async function hideResourceOffer(id: string): Promise<ResourceActionResult> {
+  try {
+    const { supabase, user } = await requireActionRole(["donor", "org", "rescue_team", "admin"]);
+    const { data, error } = await supabase.from("resource_offers")
+      .update({ owner_hidden: true }).eq("id", id).eq("user_id", user.id).eq("status", "cancelled")
+      .select("id").maybeSingle();
+    if (error) return { ok: false, message: databaseMessage(error) };
+    if (!data) return { ok: false, message: "Chỉ ẩn được nguồn lực đã hủy của bạn." };
+    refreshResources();
+    return { ok: true, message: "Đã ẩn khỏi danh sách của bạn. Lịch sử vẫn được lưu." };
+  } catch (error) {
+    return { ok: false, message: databaseMessage(error) };
+  }
+}
+
+export async function hideResourceClaim(id: string): Promise<ResourceActionResult> {
+  try {
+    const { supabase, user } = await requireActionRole(["donor", "org", "rescue_team", "admin"]);
+    const { data, error } = await supabase.from("resource_claims")
+      .update({ owner_hidden: true }).eq("id", id).eq("contributor_id", user.id).eq("status", "cancelled")
+      .select("id").maybeSingle();
+    if (error) return { ok: false, message: databaseMessage(error) };
+    if (!data) return { ok: false, message: "Chỉ ẩn được lượt đã hủy chưa qua xác minh của Admin." };
+    refreshResources();
+    return { ok: true, message: "Đã ẩn khỏi danh sách của bạn. Lịch sử vẫn được lưu." };
   } catch (error) {
     return { ok: false, message: databaseMessage(error) };
   }

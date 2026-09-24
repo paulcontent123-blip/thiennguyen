@@ -13,7 +13,7 @@ import {
   type OrganizationActionResult,
 } from "@/app/organization/actions";
 import { CreateCampaignModal } from "@/components/create-campaign-modal";
-import type { ManagedCampaign, ManagedClaim, ResourceNeed, ResourceOffer } from "@/components/donate-items/donate-items-portal";
+import type { ManagedCampaign, ResourceNeed } from "@/components/donate-items/donate-items-portal";
 import { ResourceCampaignManager } from "@/components/organization/resource-campaign-manager";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
 import { PROVINCES } from "@/lib/geo/provinces";
@@ -93,7 +93,7 @@ function CampaignPill({ status }: { status: string }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${item.className}`}>{item.label}</span>;
 }
 
-export function OrganizationDashboard({ organization, campaigns, history, page, total, totalPages, resourceCampaigns, resourceNeeds, resourceClaims, availableResourceOffers }: {
+export function OrganizationDashboard({ organization, campaigns, history, page, total, totalPages, resourceCampaigns, resourceNeeds }: {
   organization: Organization;
   campaigns: Campaign[];
   history: CampaignHistory[];
@@ -102,8 +102,6 @@ export function OrganizationDashboard({ organization, campaigns, history, page, 
   totalPages: number;
   resourceCampaigns: ManagedCampaign[];
   resourceNeeds: ResourceNeed[];
-  resourceClaims: ManagedClaim[];
-  availableResourceOffers: ResourceOffer[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<BusyForm>(null);
@@ -222,8 +220,6 @@ export function OrganizationDashboard({ organization, campaigns, history, page, 
       <ResourceCampaignManager
         campaigns={resourceCampaigns}
         needs={resourceNeeds}
-        claims={resourceClaims}
-        availableOffers={availableResourceOffers}
       />
     </section>
   );

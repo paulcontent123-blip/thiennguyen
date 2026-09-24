@@ -1,5 +1,5 @@
 import { OrganizationDashboard } from "@/components/organization/organization-dashboard";
-import type { ManagedCampaign, ManagedClaim, ResourceNeed, ResourceOffer } from "@/components/donate-items/donate-items-portal";
+import type { ManagedCampaign, ResourceNeed } from "@/components/donate-items/donate-items-portal";
 import { SiteHeader } from "@/components/site-header";
 import { requirePageRole } from "@/lib/auth/server";
 import { redirect } from "next/navigation";
@@ -51,13 +51,12 @@ export default async function OrganizationPage({ searchParams }: { searchParams?
     .order("created_at", { ascending: false });
   const resourceCampaigns = (resourceCampaignRows ?? []) as ManagedCampaign[];
   const resourceCampaignIds = resourceCampaigns.map((campaign) => campaign.id);
-  const [publicNeedsResult, availableOffersResult, managedNeedsResult] = await Promise.all([
+  const [publicNeedsResult, managedNeedsResult] = await Promise.all([
     supabase.rpc("get_public_resource_needs"),
-    supabase.rpc("get_public_resource_offers"),
     resourceCampaignIds.length
       ? supabase
           .from("resource_needs")
-          .select("id, campaign_id, resource_type, name, description, category, quantity_needed, unit, province, urgency, status, created_at, campaigns(title, slug, province)")
+          .select("id, campaign_id, resource_type, name, description, category, quantity_needed, unit, province, urgency, status, moderation_status, review_note, created_at, campaigns(title, slug, province)")
           .in("campaign_id", resourceCampaignIds)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
@@ -79,44 +78,16 @@ export default async function OrganizationPage({ searchParams }: { searchParams?
       province: item.province ? String(item.province) : null,
       urgency: String(item.urgency) as ResourceNeed["urgency"],
       status: String(item.status),
+      moderation_status: String(item.moderation_status ?? "pending_review"),
+      review_note: item.review_note ? String(item.review_note) : null,
       created_at: String(item.created_at),
       campaign_title: campaign?.title ?? "Chiến dịch",
       campaign_slug: campaign?.slug ?? "",
       campaign_province: campaign?.province ?? null,
       claimed_quantity: Number(publicNeed?.claimed_quantity ?? 0),
+      committed_quantity: Number(publicNeed?.committed_quantity ?? publicNeed?.claimed_quantity ?? 0),
     } satisfies ResourceNeed;
   });
-
-  let resourceClaims: ManagedClaim[] = [];
-  const resourceNeedIds = resourceNeeds.map((need) => need.id);
-  if (resourceNeedIds.length > 0) {
-    const { data: claims } = await supabase
-      .from("resource_claims")
-      .select("id, need_id, offer_id, contributor_id, quantity, contact_name, contact_email, contact_phone, status, expires_at, coordination_note, actual_value_vnd, created_at, resource_needs(name, unit)")
-      .in("need_id", resourceNeedIds)
-      .order("created_at", { ascending: false });
-    resourceClaims = ((claims ?? []) as unknown[]).map((row) => {
-      const item = row as Record<string, unknown>;
-      const need = relation(item.resource_needs as { name: string; unit: string } | { name: string; unit: string }[] | null);
-      return {
-        id: String(item.id),
-        need_id: String(item.need_id),
-        offer_id: item.offer_id ? String(item.offer_id) : null,
-        contributor_id: String(item.contributor_id),
-        quantity: Number(item.quantity),
-        contact_name: String(item.contact_name),
-        contact_email: String(item.contact_email),
-        contact_phone: item.contact_phone ? String(item.contact_phone) : null,
-        status: String(item.status),
-        expires_at: item.expires_at ? String(item.expires_at) : null,
-        coordination_note: item.coordination_note ? String(item.coordination_note) : null,
-        actual_value_vnd: item.actual_value_vnd === null ? null : Number(item.actual_value_vnd),
-        created_at: String(item.created_at),
-        need_name: need?.name ?? "Nhu cầu nguồn lực",
-        need_unit: need?.unit ?? "đơn vị",
-      };
-    });
-  }
 
   return (
     <main className="min-h-screen bg-paper">
@@ -130,8 +101,6 @@ export default async function OrganizationPage({ searchParams }: { searchParams?
         totalPages={totalPages}
         resourceCampaigns={resourceCampaigns}
         resourceNeeds={resourceNeeds}
-        resourceClaims={resourceClaims}
-        availableResourceOffers={(availableOffersResult.data ?? []) as ResourceOffer[]}
       />
     </main>
   );

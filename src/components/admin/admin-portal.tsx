@@ -29,7 +29,8 @@ import {
 } from "@/app/admin/actions";
 import { budgetLabel, interestLabel } from "@/lib/corporate/options";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
-import { AdminResourceWorkflow, type AdminResourceClaim, type AdminResourceNeed, type AdminResourceOffer } from "@/components/admin/admin-resource-workflow";
+import { AdminWalletPanel, type AdminWalletTopup } from "@/components/admin/admin-wallet-panel";
+import { AdminResourceWorkflow,type AdminResourceClaim, type AdminResourceNeed, type AdminResourceOffer } from "@/components/admin/admin-resource-workflow";
 import type { AdminPanelKey } from "@/lib/admin/panels";
 import { RescueAccountForm } from "@/components/admin/rescue-account-form";
 import { PROVINCES } from "@/lib/geo/provinces";
@@ -422,7 +423,7 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
   );
 }
 
-export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, initialPanel, sosAwaitingClosure = 0 }: { initialPanel?: Panel; sosAwaitingClosure?: number; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
+export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, walletTopups = [], initialPanel, sosAwaitingClosure = 0 }: { walletTopups?: AdminWalletTopup[]; initialPanel?: Panel; sosAwaitingClosure?: number; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>(initialPanel ?? "overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
@@ -454,6 +455,7 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
   const pendingTransactions = transactions.filter((tx) => tx.status === "pending");
   const resolvedTransactions = transactions.filter((tx) => tx.status !== "pending").slice(0, 30);
   const visibleTransactions = donationFilter === "pending" ? pendingTransactions : resolvedTransactions;
+  const pendingWalletTopups = walletTopups.filter((item) => item.status === "pending").length;
   const pendingResourceNeeds = resourceNeeds.filter((need) => need.moderation_status === "pending_review").length;
 
   const recentActivity = useMemo(() => {
@@ -476,6 +478,7 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
         labels={{
           corporate: newCorporateInquiries ? `Yêu cầu doanh nghiệp (${newCorporateInquiries})` : undefined,
           sos: pendingSos || sosAwaitingClosure ? `SOS Reports (${[pendingSos ? `${pendingSos} chờ` : "", sosAwaitingClosure ? `${sosAwaitingClosure} báo xong` : ""].filter(Boolean).join(", ")})` : undefined,
+          wallet: pendingWalletTopups ? `Đối soát nạp ví (${pendingWalletTopups} chờ)` : undefined,
           resources: pendingResourceNeeds ? `Duyệt nguồn lực (${pendingResourceNeeds} chờ)` : undefined,
         }}
       />
@@ -605,7 +608,9 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
           {auditFilter === "pending" ? <div className="space-y-4">{visibleDisbursements.length === 0 ? <div className="rounded-[8px] border border-line bg-white px-4 py-8 text-center text-sm text-inkSoft">Không có hồ sơ nào đang chờ hậu kiểm.</div> : null}{visibleDisbursements.map((disbursement) => <div key={disbursement.id} className="rounded-[8px] border border-line bg-white p-4"><div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><div className="font-bold text-chamDeep">{firstRelated(disbursement.campaigns)?.title ?? "—"}</div><div className="mt-1 font-mono font-bold text-son">{amount(disbursement.amount)}</div></div><div className="text-xs text-inkSoft">Đại diện approval: {fmtDate(disbursement.representative_approved_at)}</div></div><div className="mb-4 text-sm text-inkMid">{disbursement.description}</div><div className="mb-3 text-sm font-bold text-chamDeep">Chữ ký người đại diện & hậu kiểm</div><AuditTimeline disbursement={disbursement} /><div className="mt-3 flex flex-wrap items-center gap-2"><span className="mr-2 text-xs text-inkSoft">{disbursement.evidence_paths.length} tệp bằng chứng đã cung cấp</span><form className="flex flex-wrap items-center gap-2"><input name="note" placeholder="Ghi chú hậu kiểm" className="w-48 rounded-[4px] border border-line px-2 py-1.5 text-xs outline-none focus:border-son" /><button formAction={postAuditDisbursement.bind(null, disbursement.id, "valid")} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">✅ Hậu kiểm hợp lệ</button><button formAction={postAuditDisbursement.bind(null, disbursement.id, "needs_explanation")} className="rounded-[4px] bg-sky/15 px-3 py-1.5 text-xs font-bold text-sky">Yêu cầu giải trình</button><button formAction={postAuditDisbursement.bind(null, disbursement.id, "violation")} className="rounded-[4px] bg-son/15 px-3 py-1.5 text-xs font-bold text-son">Đánh dấu vi phạm</button></form></div><div className="mt-3 rounded-[4px] bg-nghe/10 px-3 py-2 text-xs text-ngheDeep">🔒 Tài liệu do người đại diện cung cấp; Admin chỉ thực hiện hậu kiểm và ghi nhận kết quả.</div></div>)}</div> : <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[700px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Ngày</th><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Bằng chứng</th><th className="px-3 py-2.5">Trạng thái</th></tr></thead><tbody>{visibleDisbursements.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-inkSoft">Chưa có hồ sơ nào được hậu kiểm.</td></tr> : visibleDisbursements.map((disbursement) => <tr key={disbursement.id} className="border-t border-line"><td className="px-3 py-2.5 text-xs text-inkSoft">{fmtDate(disbursement.post_audited_at)}</td><td className="px-3 py-2.5 font-semibold text-chamDeep">{firstRelated(disbursement.campaigns)?.title ?? "—"}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{amount(disbursement.amount)}</td><td className="px-3 py-2.5 text-xs font-bold text-lua">✓ {disbursement.evidence_paths.length} tệp</td><td className="px-3 py-2.5"><Pill status={disbursement.post_audit_status} /></td></tr>)}</tbody></table></div>}
         </section> : null}
 
-        {panel === "resources" ? <AdminResourceWorkflow needs={resourceNeeds} offers={resourceOffers} claims={resourceClaims} loadError={resourceLoadError} /> : null}
+        {panel === "wallet" ? <AdminWalletPanel topups={walletTopups} /> : null}
+
+        {panel === "resources" ?<AdminResourceWorkflow needs={resourceNeeds} offers={resourceOffers} claims={resourceClaims} loadError={resourceLoadError} /> : null}
 
         {panel === "sos" ? <section>
           <div className="mb-4 rounded-[8px] border border-line bg-white p-4">

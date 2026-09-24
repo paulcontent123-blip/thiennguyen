@@ -8,7 +8,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   const initialPanel = isAdminPanelKey(requestedPanel) ? requestedPanel : undefined;
   const { supabase } = await requirePageRole(["admin"], "/admin");
 
-  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes, resourceNeedsRes, resourceOffersRes, resourceClaimsRes] = await Promise.all([
+  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes, resourceNeedsRes, resourceOffersRes, resourceClaimsRes, walletTopupsRes] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id, title, owner_type, owner_user_id, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
@@ -79,6 +79,11 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       .from("resource_claims")
       .select("id, need_id, contributor_id, quantity, delivered_quantity, contact_name, contact_email, contact_phone, status, coordination_note, actual_value_vnd, created_at, resource_needs(name, unit, campaigns(title, slug))")
       .order("created_at", { ascending: false }),
+    supabase
+      .from("wallet_topups")
+      .select("id, user_id, tx_ref, amount_vnd, status, transfer_description, receiving_account_name, receiving_account_no, admin_note, created_at, completed_at, profiles!wallet_topups_user_id_fkey(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(200),
   ]);
 
   const relation = <T,>(value: T | T[] | null | undefined): T | null => Array.isArray(value) ? value[0] ?? null : value ?? null;
@@ -135,6 +140,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       receivingAccounts={receivingAccountsRes.data ?? []}
       transactions={transactionsRes.data ?? []}
       corporateInquiries={corporateInquiriesRes.data ?? []}
+      walletTopups={walletTopupsRes.data ?? []}
       resourceNeeds={resourceNeeds}
       resourceOffers={resourceOffers}
       resourceClaims={resourceClaims}

@@ -16,6 +16,18 @@ export type DonationActionResult =
   | { ok: true; message: string; intent: DonationIntent }
   | { ok: false; message: string };
 
+export type DonationReceipt = {
+  donorName: string | null;
+  receiptEmail: string;
+  campaignTypeLabel: string;
+  ownerName: string | null;
+  bankId: string;
+  accountNoMasked: string;
+  accountName: string;
+  transferDescription: string;
+  receivedAmountVnd: number;
+};
+
 export type DonationHistoryItem = {
   id: string;
   txRef: string;
@@ -25,6 +37,7 @@ export type DonationHistoryItem = {
   campaignSlug: string;
   createdAt: string;
   completedAt: string | null;
+  receipt: DonationReceipt | null;
 };
 
 export const DONATION_MIN_AMOUNT = 10_000;

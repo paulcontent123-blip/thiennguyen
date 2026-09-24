@@ -104,6 +104,7 @@ export function DonationDialog({
   return (
     <>
       <button
+        id="donation-trigger"
         type="button"
         onClick={() => canDonate && setOpen(true)}
         disabled={!canDonate}

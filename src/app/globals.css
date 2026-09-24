@@ -50,3 +50,31 @@ textarea {
     @apply inline-flex items-center justify-center rounded-[40px] border border-lineStrong bg-white px-5 py-3 text-sm font-bold text-chamDeep transition hover:border-son hover:text-son;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .receipt-print,
+  .receipt-print * {
+    visibility: visible;
+  }
+  .receipt-overlay {
+    position: static !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+  .receipt-print {
+    position: fixed;
+    inset: 0;
+    max-height: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    overflow: visible !important;
+  }
+  .receipt-hide-on-print {
+    display: none !important;
+  }
+}

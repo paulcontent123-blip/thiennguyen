@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { DonationReceiptModal } from "@/components/account/donation-receipt-modal";
 import type { DonationHistoryItem } from "@/lib/donations/types";
 
 const currency = new Intl.NumberFormat("vi-VN");
@@ -14,6 +18,8 @@ const statusLabels: Record<string, { label: string; className: string }> = {
 };
 
 export function DonationHistory({ items }: { items: DonationHistoryItem[] }) {
+  const [receiptItem, setReceiptItem] = useState<DonationHistoryItem | null>(null);
+
   return (
     <section className="mx-auto max-w-5xl px-6 pb-12">
       <div className="panel">
@@ -37,6 +43,7 @@ export function DonationHistory({ items }: { items: DonationHistoryItem[] }) {
                   <th className="px-3 py-2 text-right font-semibold">Số tiền</th>
                   <th className="px-3 py-2 font-semibold">Trạng thái</th>
                   <th className="px-3 py-2 font-semibold">Thời gian</th>
+                  <th className="px-3 py-2 font-semibold">Biên nhận</th>
                 </tr>
               </thead>
               <tbody>
@@ -49,6 +56,7 @@ export function DonationHistory({ items }: { items: DonationHistoryItem[] }) {
                       <td className="px-3 py-3 text-right font-mono font-bold text-son">{currency.format(item.amountVnd)}đ</td>
                       <td className="px-3 py-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${status.className}`}>{status.label}</span></td>
                       <td className="px-3 py-3 text-xs text-inkSoft">{dateTime.format(new Date(item.completedAt ?? item.createdAt))}</td>
+                      <td className="px-3 py-3">{item.receipt ? <button type="button" onClick={() => setReceiptItem(item)} className="text-xs font-bold text-sky hover:underline">Xem biên nhận</button> : <span className="text-xs text-inkSoft">{item.status === "pending" ? "Có sau khi xác nhận" : "—"}</span>}</td>
                     </tr>
                   );
                 })}
@@ -57,6 +65,7 @@ export function DonationHistory({ items }: { items: DonationHistoryItem[] }) {
           </div>
         )}
       </div>
+      {receiptItem ? <DonationReceiptModal item={receiptItem} onClose={() => setReceiptItem(null)} /> : null}
     </section>
   );
 }

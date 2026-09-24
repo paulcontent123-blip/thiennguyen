@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { CampaignDetailTabs, CampaignShare } from "@/components/campaigns/campaign-detail-tabs";
 import { CampaignFollowButton } from "@/components/campaigns/campaign-follow-button";
 import { DonationDialog } from "@/components/campaigns/donation-dialog";
+import { MobileDonateBar } from "@/components/campaigns/mobile-donate-bar";
 import { SiteHeader } from "@/components/site-header";
 import { type CampaignMedia, type CampaignSeo, type CampaignShareSettings, type CampaignUpdate } from "@/lib/campaigns/content";
 import { getCampaignFollowStates } from "@/lib/campaigns/follows";
@@ -148,7 +149,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
     : null;
 
   return (
-    <main className="min-h-screen bg-paper">
+    <main className="min-h-screen bg-paper pb-24 lg:pb-0">
       {schemaJson ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: schemaJson }} /> : null}
       <SiteHeader />
       <section className="mx-auto max-w-[1160px] px-7 py-7">
@@ -268,11 +269,19 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
                 isAuthenticated={Boolean(authResult.data.user)}
               />
               <CampaignShare title={campaign.title} compact settings={typedShareSettings} />
-              <div className="mt-3 text-[11.5px] leading-6 text-inkSoft">🔒 Mỗi lượt ủng hộ có mã giao dịch riêng. Chỉ webhook ngân hàng hợp lệ mới chuyển trạng thái từ chờ sang thành công.</div>
+              <div className="mt-3 text-[11.5px] leading-6 text-inkSoft">🔒 Mỗi lượt ủng hộ có mã giao dịch riêng. Giao dịch chỉ chuyển từ chờ sang thành công sau khi Admin đối soát khớp sao kê ngân hàng.</div>
             </section>
           </aside>
         </div>
       </section>
+      <MobileDonateBar
+        receivedAmount={receivedAmount}
+        targetAmount={targetAmount}
+        percent={progressPercent}
+        remainingDays={remainingDays}
+        canDonate={campaign.status === "active" && donationAvailable === true}
+        disabledReason={campaign.status === "closed" ? "Chiến dịch đã đóng" : campaign.status !== "active" ? "Chưa mở nhận ủng hộ" : "Hệ thống chưa mở tài khoản nhận tiền"}
+      />
     </main>
   );
 }
@@ -300,7 +309,7 @@ function CashflowTree({
         </div>
       </div>
 
-      <TreeNode icon="💰" label="Nguồn ủng hộ vào" amount={receivedAmount} meta="Chỉ cộng các giao dịch đã được webhook ngân hàng đối soát thành công" tone="income">
+      <TreeNode icon="💰" label="Nguồn ủng hộ vào" amount={receivedAmount} meta="Chỉ cộng các giao dịch đã được Admin đối soát khớp sao kê ngân hàng" tone="income">
         {campaignType === "direct" ? (
           <>
             <TreeNode icon="📋" label="Ví thực thi (90%)" amount={executionAmount} meta="Chỉ giải ngân theo tiến độ và chứng từ xác thực" tone="exec">

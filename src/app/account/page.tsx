@@ -12,8 +12,28 @@ type DonationRow = {
   status: string;
   created_at: string;
   completed_at: string | null;
-  campaigns: { title: string; slug: string } | { title: string; slug: string }[] | null;
+  donor_name: string | null;
+  receipt_email: string;
+  transfer_description: string;
+  receiving_bank_id: string;
+  receiving_account_no: string;
+  receiving_account_name: string;
+  received_amount: number | string | null;
+  campaigns: CampaignRelation | CampaignRelation[] | null;
 };
+
+type CampaignRelation = {
+  title: string;
+  slug: string;
+  campaign_type: string;
+  owner_type: string;
+  organizations: { name: string } | { name: string }[] | null;
+};
+
+function maskAccount(value: string) {
+  const digits = value.replace(/\s/g, "");
+  return digits.length > 4 ? `****${digits.slice(-4)}` : "****";
+}
 
 type FollowRow = {
   campaign_id: string;
@@ -27,7 +47,7 @@ export default async function AccountPage() {
     supabase.from("profiles").select("phone").eq("id", user.id).maybeSingle(),
     supabase
       .from("transactions")
-      .select("id, tx_ref, amount_vnd, status, created_at, completed_at, campaigns(title, slug)")
+      .select("id, tx_ref, amount_vnd, status, created_at, completed_at, donor_name, receipt_email, transfer_description, receiving_bank_id, receiving_account_no, receiving_account_name, received_amount, campaigns(title, slug, campaign_type, owner_type, organizations(name))")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50),
@@ -58,6 +78,17 @@ export default async function AccountPage() {
       campaignSlug: campaign.slug,
       createdAt: row.created_at,
       completedAt: row.completed_at,
+      receipt: row.status === "completed" ? {
+        donorName: row.donor_name,
+        receiptEmail: row.receipt_email,
+        campaignTypeLabel: campaign.campaign_type === "direct" ? "Trực tiếp (90/10)" : "Kết nối",
+        ownerName: campaign.owner_type === "individual" ? "Chủ chiến dịch cá nhân đã xác minh" : (Array.isArray(campaign.organizations) ? campaign.organizations[0]?.name : campaign.organizations?.name) ?? null,
+        bankId: row.receiving_bank_id,
+        accountNoMasked: maskAccount(row.receiving_account_no),
+        accountName: row.receiving_account_name,
+        transferDescription: row.transfer_description,
+        receivedAmountVnd: Number(row.received_amount ?? row.amount_vnd) || 0,
+      } : null,
     }];
   });
   const followedCampaigns = ((followsResult.data ?? []) as unknown as FollowRow[]).flatMap((row) => {

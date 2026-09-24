@@ -1,10 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { updateRescueLocation, updateRescueStatus } from "@/app/rescue/operations/actions";
+import { acknowledgeSosAlert, updateRescueLocation, updateRescueStatus } from "@/app/rescue/operations/actions";
+import { SosProgressPanel } from "@/components/rescue/sos-progress-panel";
+import { createClient } from "@/lib/supabase/client";
 
 type RescueTeam = {
+  id: string;
   name: string;
   resource_types: string[];
   province: string | null;
@@ -15,6 +18,11 @@ type RescueTeam = {
 };
 
 type SosTask = {
+  alertId: string;
+  distanceKm: number;
+  acknowledgedAt: string | null;
+  responseStatus: string | null;
+  responseNote: string | null;
   id: string;
   location_text: string;
   description: string | null;
@@ -43,6 +51,42 @@ export function RescueOperationsDashboard({ team, tasks, canEdit }: { team: Resc
   const [locationLoading, setLocationLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission | "unsupported">("unsupported");
+  const teamId = team?.id;
+
+  useEffect(() => {
+    if (typeof Notification !== "undefined") setNotificationPermission(Notification.permission);
+  }, []);
+
+  useEffect(() => {
+    if (!teamId || !canEdit) return;
+    const supabase = createClient();
+    const channel = supabase
+      .channel(`sos-team-alerts-${teamId}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "sos_team_alerts", filter: `rescue_team_id=eq.${teamId}`,
+      }, () => {
+        if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+          new Notification("Có SOS mới trong bán kính hoạt động", { body: "Mở trang Điều phối cứu trợ để xem chi tiết." });
+        }
+        router.refresh();
+      })
+      .subscribe();
+    const fallback = window.setInterval(() => router.refresh(), 30_000);
+    return () => { window.clearInterval(fallback); void supabase.removeChannel(channel); };
+  }, [teamId, canEdit, router]);
+
+  async function acknowledge(alertId: string) {
+    setError(null);
+    try {
+      const result = await acknowledgeSosAlert(alertId);
+      if (!result.ok) { setError(result.message); return; }
+      setNotice(result.message);
+      router.refresh();
+    } catch {
+      setError("Không thể xác nhận cảnh báo lúc này.");
+    }
+  }
 
   async function handleStatusChange(status: string) {
     setStatusLoading(true);
@@ -136,20 +180,23 @@ export function RescueOperationsDashboard({ team, tasks, canEdit }: { team: Resc
             <div className="mt-4 border-t border-line pt-4">
               <p className="mb-2 text-xs font-bold uppercase tracking-wide text-inkSoft">Vị trí hiện tại</p>
               <p className="text-xs text-inkMid">
-                {team.latitude && team.longitude ? `${team.latitude.toFixed(4)}, ${team.longitude.toFixed(4)}` : "Chưa cập nhật"}
+                {team.latitude !== null && team.longitude !== null ? `${team.latitude.toFixed(4)}, ${team.longitude.toFixed(4)}` : "Chưa cập nhật"}
               </p>
               <button type="button" onClick={handleUpdateLocation} disabled={locationLoading} className="button-secondary mt-2 w-full">
                 {locationLoading ? "Đang lấy vị trí…" : "📍 Cập nhật vị trí GPS"}
               </button>
+              {notificationPermission === "default" ? (
+                <button type="button" onClick={() => void Notification.requestPermission().then(setNotificationPermission)} className="mt-3 text-xs font-semibold text-sky hover:underline">Bật thông báo trên trình duyệt</button>
+              ) : null}
             </div>
           </div>
         ) : null}
       </aside>
 
       <div>
-        <h2 className="mb-3 font-serif text-lg font-semibold text-chamDeep">Nhiệm vụ SOS đang chờ ({tasks.length})</h2>
+        <h2 className="mb-3 font-serif text-lg font-semibold text-chamDeep">SOS trong bán kính ({tasks.length})</h2>
         <p className="mb-4 text-xs text-inkSoft">
-          Danh sách toàn bộ báo cáo SOS chưa xử lý — chưa lọc theo khoảng cách vì hệ thống chưa có toạ độ đầy đủ cho mọi báo cáo.
+          Chỉ hiển thị SOS đang cần hỗ trợ, có GPS và nằm trong bán kính của đội. Báo cáo của khách phải qua Admin trước; báo cáo từ tài khoản đăng nhập đang dùng luồng xác nhận hiện có. Trình duyệt tự kiểm tra lại mỗi 30 giây khi mất kết nối.
         </p>
         {tasks.length === 0 ? (
           <div className="rounded-[14px] border-2 border-dashed border-lineStrong bg-paperMid p-10 text-center text-sm text-inkMid">
@@ -163,9 +210,23 @@ export function RescueOperationsDashboard({ team, tasks, canEdit }: { team: Resc
                 <div key={task.id} className="rounded-[14px] border border-line bg-white p-4">
                   <span className={`rounded-[4px] px-2 py-0.5 text-xs font-bold ${status.className}`}>{status.label}</span>
                   <h3 className="mt-2 font-serif text-base font-semibold text-chamDeep">{task.location_text}</h3>
+                  <p className="mt-1 text-xs font-semibold text-sky">Cách vị trí đội {task.distanceKm.toFixed(1)} km</p>
                   {task.description ? <p className="mt-1 line-clamp-2 text-xs text-inkMid">{task.description}</p> : null}
                   {task.needs.length ? <p className="mt-2 text-xs font-semibold text-sky">{task.needs.join(", ")}</p> : null}
                   <p className="mt-2 text-[11px] text-inkSoft">{datetime.format(new Date(task.created_at))}</p>
+                  {canEdit ? task.acknowledgedAt ? (
+                    <>
+                      <p className="mt-2 text-xs font-semibold text-lua">✓ Đã xem cảnh báo</p>
+                      <SosProgressPanel
+                        alertId={task.alertId}
+                        responseStatus={task.responseStatus}
+                        responseNote={task.responseNote}
+                        onResult={(result) => { if (result.ok) { setError(null); setNotice(result.message); router.refresh(); } else { setError(result.message); } }}
+                      />
+                    </>
+                  ) : (
+                    <button type="button" onClick={() => void acknowledge(task.alertId)} className="button-secondary mt-3 text-xs">Xác nhận đã xem</button>
+                  ) : null}
                 </div>
               );
             })}

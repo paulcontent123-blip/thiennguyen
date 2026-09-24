@@ -1,6 +1,4 @@
-"use client";
-
-import { useMemo, useState } from "react";
+import { TEAM_PROGRESS, type SosTeamResponse } from "@/lib/sos/team-progress";
 
 type SosReport = {
   id: string;
@@ -10,6 +8,7 @@ type SosReport = {
   status: string;
   photo_url: string | null;
   created_at: string;
+  team_responses?: SosTeamResponse[];
 };
 
 const datetime = new Intl.DateTimeFormat("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
@@ -20,47 +19,11 @@ const statusLabels: Record<string, { label: string; className: string }> = {
   handled: { label: "Đã xử lý", className: "bg-lua/15 text-lua" },
 };
 
-type FilterKey = "all" | "urgent" | "needs_support" | "handled";
-
 export function SosReportList({ reports }: { reports: SosReport[] }) {
-  const [filter, setFilter] = useState<FilterKey>("all");
-
-  const counts = useMemo(
-    () => ({
-      all: reports.length,
-      urgent: reports.filter((r) => r.status === "urgent").length,
-      needs_support: reports.filter((r) => r.status === "needs_support").length,
-      handled: reports.filter((r) => r.status === "handled").length,
-    }),
-    [reports],
-  );
-
-  const filtered = filter === "all" ? reports : reports.filter((r) => r.status === filter);
-
-  const filters: { key: FilterKey; label: string }[] = [
-    { key: "all", label: `Tất cả (${counts.all})` },
-    { key: "urgent", label: `🔴 Khẩn cấp (${counts.urgent})` },
-    { key: "needs_support", label: `🟠 Cần hỗ trợ (${counts.needs_support})` },
-    { key: "handled", label: `🟢 Đã xử lý (${counts.handled})` },
-  ];
+  const filtered = reports;
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        {filters.map((item) => (
-          <button
-            key={item.key}
-            type="button"
-            onClick={() => setFilter(item.key)}
-            className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-              filter === item.key ? "border-son text-son" : "border-lineStrong text-inkMid hover:border-son hover:text-son"
-            }`}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
-
       {filtered.length === 0 ? (
         <div className="rounded-[14px] border-2 border-dashed border-lineStrong bg-paperMid p-10 text-center text-sm text-inkMid">
           Không có báo cáo nào ở trạng thái này.
@@ -80,6 +43,22 @@ export function SosReportList({ reports }: { reports: SosReport[] }) {
                   <h3 className="mt-2 font-serif text-base font-semibold text-chamDeep">{report.location_text}</h3>
                   {report.description ? <p className="mt-1 line-clamp-2 text-xs text-inkMid">{report.description}</p> : null}
                   {report.needs?.length ? <p className="mt-2 text-xs font-semibold text-sky">{report.needs.join(", ")}</p> : null}
+                  {report.team_responses?.length ? (
+                    <div className="mt-3 rounded-[8px] bg-paper p-2.5">
+                      <p className="text-[11px] font-bold uppercase tracking-wide text-inkSoft">Đội cứu trợ phản hồi</p>
+                      <ul className="mt-1.5 flex flex-col gap-1.5">
+                        {report.team_responses.map((response, index) => {
+                          const progress = TEAM_PROGRESS[response.progress] ?? TEAM_PROGRESS.acknowledged;
+                          return (
+                            <li key={`${response.team_name}-${index}`} className="flex flex-wrap items-center justify-between gap-1.5 text-xs">
+                              <span className="font-semibold text-chamDeep">{response.member_kind === "team" ? "🚑" : "🙋"} {response.team_name}</span>
+                              <span className={`rounded-[4px] px-1.5 py-0.5 font-bold ${progress.className}`}>{progress.icon} {progress.label}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
                   <p className="mt-2 text-[11px] text-inkSoft">{datetime.format(new Date(report.created_at))}</p>
                 </div>
               </div>

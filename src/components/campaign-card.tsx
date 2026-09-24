@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { CampaignFollowButton } from "@/components/campaigns/campaign-follow-button";
+import type { CampaignFollowState } from "@/lib/campaigns/follows";
 
 const currency = new Intl.NumberFormat("vi-VN");
 
@@ -24,11 +26,15 @@ const statusLabels: Record<string, string> = {
   closed: "Đã đóng",
 };
 
-export function CampaignCard({ campaign }: { campaign: CampaignCardData }) {
+export function CampaignCard({ campaign, follow }: {
+  campaign: CampaignCardData;
+  follow?: { state: CampaignFollowState; viewer: "guest" | "donor" | "other" };
+}) {
   return (
+    <div className="group relative">
     <Link
       href={`/campaigns/${encodeURIComponent(campaign.slug)}`}
-      className="group flex flex-col gap-3 rounded-[14px] border border-line bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-card"
+      className="flex h-full flex-col gap-3 rounded-[14px] border border-line bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-card"
     >
       <div
         className="relative flex h-32 items-center justify-center overflow-hidden rounded-[8px] bg-gradient-to-br from-chamSoft to-paperDeep text-4xl transition group-hover:from-sonSoft group-hover:to-ngheXsoft"
@@ -51,5 +57,11 @@ export function CampaignCard({ campaign }: { campaign: CampaignCardData }) {
         <span className="font-bold text-sky">Xem chi tiết →</span>
       </div>
     </Link>
+    {follow && campaign.id ? (
+      <div className="absolute right-6 top-6 z-10">
+        <CampaignFollowButton campaignId={campaign.id} campaignSlug={campaign.slug} initialState={follow.state} viewer={follow.viewer} compact />
+      </div>
+    ) : null}
+    </div>
   );
 }

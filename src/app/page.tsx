@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SiteHeader } from "@/components/site-header";
 import { CampaignCard, type CampaignCardData } from "@/components/campaign-card";
+import { getCampaignFollowStates, type CampaignFollowState } from "@/lib/campaigns/follows";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { getHomepageStats } from "@/lib/stats/homepage-stats";
@@ -105,6 +106,18 @@ export default async function HomePage() {
     getCampaigns("individual"),
     getHomepageStats(),
   ]);
+  let followViewer: "guest" | "donor" | "other" = "guest";
+  let followStates: Record<string, CampaignFollowState> = {};
+  if (hasSupabaseEnv()) {
+    const supabase = createClient();
+    const { data: authData } = await supabase.auth.getUser();
+    const { data: profile } = authData.user
+      ? await supabase.from("profiles").select("role").eq("id", authData.user.id).maybeSingle()
+      : { data: null };
+    followViewer = !authData.user ? "guest" : profile?.role === "donor" ? "donor" : "other";
+    const ids = [...campaigns, ...personalCampaigns].flatMap((campaign) => campaign.id ? [campaign.id] : []);
+    followStates = await getCampaignFollowStates(supabase, ids, followViewer === "donor" ? authData.user?.id : undefined);
+  }
   const [heroMain, ...heroRest] = campaigns;
   const heroSub = heroRest.slice(0, 2);
   const stats = [
@@ -252,7 +265,7 @@ export default async function HomePage() {
         {campaigns.length > 0 ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {campaigns.map((c) => (
-              <CampaignCard key={c.slug} campaign={c} />
+              <CampaignCard key={c.slug} campaign={c} follow={{ state: followStates[c.id ?? ""] ?? { count: 0, followed: false }, viewer: followViewer }} />
             ))}
           </div>
         ) : (
@@ -276,7 +289,7 @@ export default async function HomePage() {
           {personalCampaigns.length > 0 ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {personalCampaigns.map((campaign) => (
-                <CampaignCard key={campaign.slug} campaign={campaign} />
+                <CampaignCard key={campaign.slug} campaign={campaign} follow={{ state: followStates[campaign.id ?? ""] ?? { count: 0, followed: false }, viewer: followViewer }} />
               ))}
             </div>
           ) : (

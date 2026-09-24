@@ -13,6 +13,7 @@ export function SosReportForm({ isAuthenticated }: { isAuthenticated: boolean })
   const [gpsStatus, setGpsStatus] = useState<string>("");
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
+  const [requestCampaign, setRequestCampaign] = useState(false);
 
   function getLocation() {
     if (!navigator.geolocation) {
@@ -44,17 +45,6 @@ export function SosReportForm({ isAuthenticated }: { isAuthenticated: boolean })
     router.refresh();
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="rounded-[14px] border border-line bg-white p-6 text-center">
-        <p className="text-sm text-inkMid">Cần đăng nhập để gửi tín hiệu SOS (giúp hạn chế báo ảo khi chưa tích hợp xác minh SĐT).</p>
-        <a href="/login?next=/sos" className="button-primary mt-4 inline-flex">
-          Đăng nhập để báo SOS
-        </a>
-      </div>
-    );
-  }
-
   if (success) {
     return (
       <div className="rounded-[14px] border border-lua/30 bg-lua/10 p-6 text-center text-sm text-lua">
@@ -71,6 +61,13 @@ export function SosReportForm({ isAuthenticated }: { isAuthenticated: boolean })
       <h2 className="font-serif text-lg font-semibold text-chamDeep">🚨 Phát tín hiệu SOS</h2>
 
       {error ? <p className="rounded-[8px] bg-son/10 p-3 text-sm text-son">{error}</p> : null}
+
+      {!isAuthenticated ? (
+        <p className="rounded-[8px] bg-nghe/10 p-3 text-xs leading-5 text-ngheDeep">
+          Bạn đang gửi với tư cách khách. Báo cáo sẽ được Admin xác nhận trước khi hiển thị công khai và chuyển tới đội cứu trợ.
+        </p>
+      ) : null}
+      <input type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" className="absolute left-[-9999px] h-0 w-0 opacity-0" />
 
       <label className="grid gap-1 text-sm font-semibold text-chamDeep">
         Vị trí (mô tả cụ thể: xã/huyện/tỉnh, địa danh gần nhất)
@@ -112,6 +109,27 @@ export function SosReportForm({ isAuthenticated }: { isAuthenticated: boolean })
         Số điện thoại liên hệ
         <input className="rounded-[8px] border border-line px-4 py-3 text-sm font-normal" name="contactPhone" type="tel" placeholder="09xx xxx xxx" required />
       </label>
+
+      <div className="rounded-[8px] border border-line bg-paper p-4">
+        <label className="flex items-start gap-2 text-sm font-semibold text-chamDeep">
+          <input type="checkbox" name="requestCampaign" checked={requestCampaign} onChange={(event) => setRequestCampaign(event.target.checked)} className="mt-1" />
+          Đề xuất lập chiến dịch gây quỹ khẩn cấp từ SOS này
+        </label>
+        <p className="mt-1 text-xs leading-5 text-inkSoft">Người chưa đăng nhập cũng có thể đề xuất. Admin xác minh SOS và chọn tổ chức đã duyệt; đề xuất không tự mở nhận tiền.</p>
+        {requestCampaign ? (
+          <div className="mt-3 grid gap-3">
+            <label className="grid gap-1 text-xs font-semibold text-chamDeep">Tên chiến dịch đề xuất
+              <input name="campaignTitle" required minLength={8} maxLength={180} className="rounded-[8px] border border-line px-3 py-2 text-sm font-normal" placeholder="Cứu trợ khẩn cấp tại…" />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-chamDeep">Mục tiêu dự kiến (VND)
+              <input name="campaignTarget" required type="number" min={100000} max={100000000000} step={1} className="rounded-[8px] border border-line px-3 py-2 text-sm font-normal" />
+            </label>
+            <label className="grid gap-1 text-xs font-semibold text-chamDeep">Email liên hệ (không bắt buộc)
+              <input name="campaignEmail" type="email" className="rounded-[8px] border border-line px-3 py-2 text-sm font-normal" />
+            </label>
+          </div>
+        ) : null}
+      </div>
 
       <button className="button-primary w-full" type="submit" disabled={loading}>
         {loading ? "Đang gửi…" : "🚨 Phát tín hiệu SOS ngay"}

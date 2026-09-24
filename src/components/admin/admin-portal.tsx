@@ -23,12 +23,14 @@ import {
   requestCampaignRevision,
   requestPersonalVerificationRevision,
   requestOrganizationRevision,
+  reviewAnonymousSosReport,
   setCorporateInquiryStatus,
   upsertPlatformReceivingAccount,
 } from "@/app/admin/actions";
 import { budgetLabel, interestLabel } from "@/lib/corporate/options";
+import { AdminSidebar } from "@/components/admin/admin-sidebar";
+import type { AdminPanelKey } from "@/lib/admin/panels";
 import { RescueAccountForm } from "@/components/admin/rescue-account-form";
-import { createClient } from "@/lib/supabase/client";
 import { PROVINCES } from "@/lib/geo/provinces";
 
 type FormAction = (formData: FormData) => void | Promise<void>;
@@ -263,7 +265,7 @@ type CorporateInquiry = {
   campaigns: Related<{ title: string }>;
 };
 
-type Panel = "overview" | "campaigns" | "kyc" | "personal" | "payments" | "disbursement" | "sos" | "donations" | "corporate";
+type Panel = AdminPanelKey;
 type CampaignFilter = "all" | "pending_review" | "needs_revision" | "approved";
 type AuditFilter = "pending" | "reviewed";
 
@@ -419,37 +421,20 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
   );
 }
 
-export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries }: { corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[] }) {
+export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries, initialPanel, sosAwaitingClosure = 0 }: { initialPanel?: Panel; sosAwaitingClosure?: number; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[] }) {
   const router = useRouter();
-  const [panel, setPanel] = useState<Panel>("overview");
+  const [panel, setPanel] = useState<Panel>(initialPanel ?? "overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
   const [campaignProvinceFilter, setCampaignProvinceFilter] = useState<string>("");
   const [auditFilter, setAuditFilter] = useState<AuditFilter>("pending");
   const [donationFilter, setDonationFilter] = useState<"pending" | "resolved">("pending");
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [logoutError, setLogoutError] = useState<string | null>(null);
-
-  async function handleLogout() {
-    setLoggingOut(true);
-    setLogoutError(null);
-
-    const supabase = createClient();
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      setLoggingOut(false);
-      setLogoutError("Không thể đăng xuất. Vui lòng thử lại.");
-      return;
-    }
-
-    router.replace("/");
-    router.refresh();
-  }
 
   const pendingCampaigns = campaigns.filter((campaign) => campaign.status === "pending_review").length;
   const pendingOrganizations = organizations.filter((organization) => organization.license_status === "pending").length;
   const pendingPersonalProfiles = personalProfiles.filter((profile) => profile.verification_status === "pending").length;
   const pendingRescue = rescueApplications.filter((application) => application.status === "pending").length;
-  const unhandledSos = sosReports.filter((report) => report.status !== "handled").length;
+  const unhandledSos = sosReports.filter((report) => report.status === "urgent" || report.status === "needs_support").length;
+  const pendingSos = sosReports.filter((report) => report.status === "pending_review").length;
   const urgentSos = sosReports.filter((report) => report.status === "urgent").length;
   const totalDisbursement = disbursements.reduce((total, item) => total + (Number(item.amount) || 0), 0);
 
@@ -479,33 +464,18 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
     return items.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8);
   }, [campaigns, organizations, personalProfiles, rescueApplications, sosReports]);
 
-  const navItems: { key: Panel; icon: string; label: string }[] = [
-    { key: "overview", icon: "📊", label: "Tổng quan" },
-    { key: "campaigns", icon: "🎯", label: "Duyệt chiến dịch" },
-    { key: "kyc", icon: "📋", label: "Xác minh giấy phép" },
-    { key: "personal", icon: "👤", label: "Xác minh cá nhân" },
-    { key: "payments", icon: "🏦", label: "Tài khoản nhận tiền" },
-    { key: "donations", icon: "🧾", label: "Đối soát quyên góp" },
-    { key: "corporate", icon: "🤝", label: `Yêu cầu doanh nghiệp${corporateInquiries.some((item) => item.status === "new") ? ` (${corporateInquiries.filter((item) => item.status === "new").length})` : ""}` },
-    { key: "disbursement", icon: "💰", label: "Hậu kiểm giải ngân" },
-    { key: "sos", icon: "📍", label: "SOS Reports" },
-  ];
+  const newCorporateInquiries = corporateInquiries.filter((item) => item.status === "new").length;
 
   return (
     <div className="min-h-screen bg-paperMid lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">
-      <aside className="flex flex-col bg-chamDeep px-3 py-5 text-white lg:min-h-screen lg:px-0 lg:py-6">
-        <div className="border-b border-white/10 px-2 pb-4 lg:px-5"><div className="text-sm text-white/65">Thiện Nguyện</div><strong className="font-serif text-[17px]">Admin Portal</strong></div>
-        <nav className="flex gap-1 overflow-x-auto pt-3 lg:flex-col lg:gap-0 lg:px-0">
-          {navItems.map((item) => <button key={item.key} type="button" onClick={() => setPanel(item.key)} className={`flex shrink-0 items-center gap-2.5 border-l-[3px] px-3 py-2.5 text-left text-[13px] transition lg:px-5 ${panel === item.key ? "border-l-son bg-white/10 font-bold text-white" : "border-l-transparent text-white/65 hover:bg-white/[0.06] hover:text-white"}`}><span className="w-[18px] text-center">{item.icon}</span>{item.label}</button>)}
-        </nav>
-        <div className="mt-4 border-t border-white/10 pt-3 lg:mt-auto lg:px-3 lg:pt-4">
-          <Link href="/" className="flex items-center gap-2.5 px-2 py-2.5 text-[13px] text-white/65 transition hover:text-white"><span className="w-[18px] text-center">←</span>Về trang chủ</Link>
-          <button type="button" onClick={handleLogout} disabled={loggingOut} className="flex w-full items-center gap-2.5 rounded-[4px] px-2 py-2.5 text-left text-[13px] font-bold text-white/75 transition hover:bg-white/10 hover:text-white disabled:cursor-wait disabled:opacity-60">
-            <span className="w-[18px] text-center">↪</span>{loggingOut ? "Đang đăng xuất…" : "Đăng xuất"}
-          </button>
-          {logoutError ? <p className="px-2 pt-1 text-xs text-red-300">{logoutError}</p> : null}
-        </div>
-      </aside>
+      <AdminSidebar
+        active={panel}
+        onSelect={setPanel}
+        labels={{
+          corporate: newCorporateInquiries ? `Yêu cầu doanh nghiệp (${newCorporateInquiries})` : undefined,
+          sos: pendingSos || sosAwaitingClosure ? `SOS Reports (${[pendingSos ? `${pendingSos} chờ` : "", sosAwaitingClosure ? `${sosAwaitingClosure} báo xong` : ""].filter(Boolean).join(", ")})` : undefined,
+        }}
+      />
 
       <main className="min-w-0 bg-paper p-4 sm:p-6 lg:p-[30px]">
         {panel === "overview" ? <section>
@@ -650,8 +620,9 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
             </div>
           </div>
           <h1 className="mb-5 font-serif text-[21px] font-medium text-chamDeep">Quản lý SOS Reports</h1>
+          <Link href="/admin/sos" className="button-secondary mb-4 inline-flex text-sm">Điều phối xe, cảnh báo TNV và chiến dịch khẩn cấp →</Link>
           <div className="mb-4 rounded-[8px] border border-line bg-white p-4"><div className="mb-3 text-sm font-bold text-chamDeep">Hồ sơ hoạt động cứu trợ chờ duyệt ({pendingRescue})</div>{pendingRescue === 0 ? <p className="text-sm text-inkSoft">Không có hồ sơ nào đang chờ.</p> : <div className="space-y-3">{rescueApplications.filter((application) => application.status === "pending").map((application) => <div key={application.id} className="flex flex-wrap items-center gap-3 border-t border-line pt-3 first:border-t-0 first:pt-0"><div className="min-w-[220px] flex-1"><strong className="text-chamDeep">{application.team_name || application.contact_name}</strong><div className="text-xs text-inkSoft">{application.resource_types.join(" · ") || "Chưa khai báo"} · {application.province ?? "Chưa rõ địa bàn"} · bán kính {application.radius_km ?? "—"}km</div><div className="mt-0.5 text-xs text-inkSoft">{application.contact_email}{application.contact_phone ? ` · ${application.contact_phone}` : ""}</div></div><form className="flex items-center gap-2"><button formAction={approveRescueApplication.bind(null, application.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Duyệt{application.submitted_by ? " & kích hoạt" : ""}</button><button formAction={rejectRescueApplication.bind(null, application.id)} className="rounded-[4px] bg-son/15 px-3 py-1.5 text-xs font-bold text-son">Từ chối</button></form></div>)}</div>}</div>
-          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><div className="border-b border-line px-4 py-3.5 text-sm font-bold text-chamDeep">Điểm SOS thực địa ({unhandledSos} chưa xử lý)</div><table className="w-full min-w-[820px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Ảnh</th><th className="px-3 py-2.5">Vị trí</th><th className="px-3 py-2.5">Tình trạng</th><th className="px-3 py-2.5">Nhu cầu</th><th className="px-3 py-2.5">Liên hệ</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{sosReports.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-inkSoft">Chưa có báo cáo SOS nào.</td></tr> : sosReports.map((report) => <tr key={report.id} className="border-t border-line"><td className="px-3 py-2.5">{report.photo_url ? <a href={report.photo_url} target="_blank" rel="noreferrer"><img src={report.photo_url} alt="" className="h-12 w-12 rounded-[6px] object-cover" /></a> : <span className="text-xs text-inkSoft">—</span>}</td><td className="px-3 py-2.5"><strong className="text-chamDeep">{report.location_text}</strong>{report.description ? <div className="text-xs text-inkMid">{report.description}</div> : null}<div className="text-xs text-inkSoft">{fmtDate(report.created_at)}</div></td><td className="px-3 py-2.5"><Pill status={report.status} /></td><td className="px-3 py-2.5 text-inkMid">{report.needs.join(", ") || "—"}</td><td className="px-3 py-2.5 text-xs text-inkMid">{report.contact_phone ?? "—"}</td><td className="px-3 py-2.5">{report.status !== "handled" ? <form><button formAction={markSosHandled.bind(null, report.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Đánh dấu đã xử lý</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><div className="border-b border-line px-4 py-3.5 text-sm font-bold text-chamDeep">Điểm SOS thực địa ({unhandledSos} chưa xử lý)</div><table className="w-full min-w-[820px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Ảnh</th><th className="px-3 py-2.5">Vị trí</th><th className="px-3 py-2.5">Tình trạng</th><th className="px-3 py-2.5">Nhu cầu</th><th className="px-3 py-2.5">Liên hệ</th><th className="px-3 py-2.5">Thao tác</th></tr></thead><tbody>{sosReports.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-inkSoft">Chưa có báo cáo SOS nào.</td></tr> : sosReports.map((report) => <tr key={report.id} className="border-t border-line"><td className="px-3 py-2.5">{report.photo_url ? <a href={report.photo_url} target="_blank" rel="noreferrer"><img src={report.photo_url} alt="" className="h-12 w-12 rounded-[6px] object-cover" /></a> : <span className="text-xs text-inkSoft">—</span>}</td><td className="px-3 py-2.5"><strong className="text-chamDeep">{report.location_text}</strong>{report.description ? <div className="text-xs text-inkMid">{report.description}</div> : null}<div className="text-xs text-inkSoft">{fmtDate(report.created_at)}</div></td><td className="px-3 py-2.5"><Pill status={report.status} /></td><td className="px-3 py-2.5 text-inkMid">{report.needs.join(", ") || "—"}</td><td className="px-3 py-2.5 text-xs text-inkMid">{report.contact_phone ?? "—"}</td><td className="px-3 py-2.5">{report.status === "pending_review" ? <form className="flex flex-col gap-1.5"><button formAction={reviewAnonymousSosReport.bind(null, report.id, "needs_support")} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Xác nhận</button><button formAction={reviewAnonymousSosReport.bind(null, report.id, "urgent")} className="rounded-[4px] bg-nghe px-3 py-1.5 text-xs font-bold text-white">Xác nhận khẩn cấp</button><button formAction={reviewAnonymousSosReport.bind(null, report.id, "rejected")} className="rounded-[4px] bg-son/15 px-3 py-1.5 text-xs font-bold text-son">Từ chối</button></form> : report.status === "urgent" || report.status === "needs_support" ? <form><button formAction={markSosHandled.bind(null, report.id)} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">Đánh dấu đã xử lý</button></form> : <span className="text-xs text-inkSoft">—</span>}</td></tr>)}</tbody></table></div>
         </section> : null}
       </main>
     </div>

@@ -13,6 +13,8 @@ import {
   type OrganizationActionResult,
 } from "@/app/organization/actions";
 import { CreateCampaignModal } from "@/components/create-campaign-modal";
+import type { ManagedCampaign, ManagedClaim, ResourceNeed, ResourceOffer } from "@/components/donate-items/donate-items-portal";
+import { ResourceCampaignManager } from "@/components/organization/resource-campaign-manager";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
 import { PROVINCES } from "@/lib/geo/provinces";
 
@@ -91,7 +93,18 @@ function CampaignPill({ status }: { status: string }) {
   return <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${item.className}`}>{item.label}</span>;
 }
 
-export function OrganizationDashboard({ organization, campaigns, history, page, total, totalPages }: { organization: Organization; campaigns: Campaign[]; history: CampaignHistory[]; page: number; total: number; totalPages: number }) {
+export function OrganizationDashboard({ organization, campaigns, history, page, total, totalPages, resourceCampaigns, resourceNeeds, resourceClaims, availableResourceOffers }: {
+  organization: Organization;
+  campaigns: Campaign[];
+  history: CampaignHistory[];
+  page: number;
+  total: number;
+  totalPages: number;
+  resourceCampaigns: ManagedCampaign[];
+  resourceNeeds: ResourceNeed[];
+  resourceClaims: ManagedClaim[];
+  availableResourceOffers: ResourceOffer[];
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState<BusyForm>(null);
   const [profileNotice, setProfileNotice] = useState<Notice>(null);
@@ -205,6 +218,13 @@ export function OrganizationDashboard({ organization, campaigns, history, page, 
           })}</tbody></table></div>
         {totalPages > 1 ? <div className="flex items-center justify-between border-t border-line px-5 py-4 text-sm"><span className="text-inkSoft">Trang {page}/{totalPages}</span><div className="flex gap-2"><Link aria-disabled={page <= 1} href={`/organization?page=${Math.max(1, page - 1)}`} className={`rounded-[6px] border border-lineStrong px-3 py-2 font-bold ${page <= 1 ? "pointer-events-none opacity-40" : "hover:border-son hover:text-son"}`}>← Trước</Link><Link aria-disabled={page >= totalPages} href={`/organization?page=${Math.min(totalPages, page + 1)}`} className={`rounded-[6px] border border-lineStrong px-3 py-2 font-bold ${page >= totalPages ? "pointer-events-none opacity-40" : "hover:border-son hover:text-son"}`}>Sau →</Link></div></div> : null}
       </div>
+
+      <ResourceCampaignManager
+        campaigns={resourceCampaigns}
+        needs={resourceNeeds}
+        claims={resourceClaims}
+        availableOffers={availableResourceOffers}
+      />
     </section>
   );
 }

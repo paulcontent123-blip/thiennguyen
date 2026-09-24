@@ -29,6 +29,10 @@ textarea {
   font: inherit;
 }
 
+.leaflet-container {
+  font-family: "Times New Roman", Times, serif;
+}
+
 @layer components {
   .panel {
     @apply rounded-[14px] border border-line bg-white p-6 shadow-card;

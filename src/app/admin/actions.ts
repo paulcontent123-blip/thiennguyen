@@ -502,6 +502,7 @@ export async function approveRescueApplication(id: string) {
       user_id: application.submitted_by,
       application_id: id,
       name: application.team_name || application.contact_name || "Đội cứu trợ",
+      member_kind: application.team_name?.trim() ? "team" : "volunteer",
       resource_types: application.resource_types ?? [],
       province: application.province,
       radius_km: application.radius_km,
@@ -885,6 +886,22 @@ export async function setCorporateInquiryStatus(id: string, status: "new" | "con
   revalidatePath("/admin");
 }
 
+export async function reviewAnonymousSosReport(id: string, decision: "needs_support" | "urgent" | "rejected") {
+  const { supabase } = await requireAdmin();
+  const { data, error } = await supabase
+    .from("sos_reports")
+    .update({ status: decision })
+    .eq("id", id)
+    .eq("status", "pending_review")
+    .select("id")
+    .maybeSingle();
+  assertMutationSucceeded(error, "Không thể cập nhật báo cáo SOS.");
+  if (!data) throw new Error("Báo cáo không còn ở trạng thái chờ xác nhận.");
+  revalidatePath("/admin");
+  revalidatePath("/sos");
+  revalidatePath("/rescue/operations");
+}
+
 export async function markSosHandled(id: string) {
   const { supabase, user } = await requireAdmin();
   const { error } = await supabase
@@ -893,4 +910,5 @@ export async function markSosHandled(id: string) {
     .eq("id", id);
   assertMutationSucceeded(error, "Không thể cập nhật SOS report.");
   revalidatePath("/admin");
+  revalidatePath("/rescue/operations");
 }

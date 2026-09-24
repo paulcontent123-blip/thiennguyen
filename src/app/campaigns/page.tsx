@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { CampaignCard, type CampaignCardData } from "@/components/campaign-card";
 import { SiteHeader } from "@/components/site-header";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
+import { getCampaignFollowStates, type CampaignFollowState } from "@/lib/campaigns/follows";
 import { PROVINCES } from "@/lib/geo/provinces";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -121,6 +122,21 @@ async function getPublicCampaigns(searchParams: SearchParams, page: number) {
 export default async function CampaignsPage({ searchParams = {} }: { searchParams?: SearchParams }) {
   const requestedPage = getPage(firstParam(searchParams.page));
   const { campaigns, total } = await getPublicCampaigns(searchParams, requestedPage);
+  let viewer: "guest" | "donor" | "other" = "guest";
+  let followStates: Record<string, CampaignFollowState> = {};
+  if (hasSupabaseEnv()) {
+    const supabase = createClient();
+    const { data: authData } = await supabase.auth.getUser();
+    const { data: profile } = authData.user
+      ? await supabase.from("profiles").select("role").eq("id", authData.user.id).maybeSingle()
+      : { data: null };
+    viewer = !authData.user ? "guest" : profile?.role === "donor" ? "donor" : "other";
+    followStates = await getCampaignFollowStates(
+      supabase,
+      campaigns.map((campaign) => campaign.id),
+      viewer === "donor" ? authData.user?.id : undefined,
+    );
+  }
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   if (requestedPage > totalPages) {
@@ -204,7 +220,9 @@ export default async function CampaignsPage({ searchParams = {} }: { searchParam
 
         {campaigns.length > 0 ? (
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {campaigns.map((campaign) => <CampaignCard key={campaign.id} campaign={campaign} />)}
+            {campaigns.map((campaign) => (
+              <CampaignCard key={campaign.id} campaign={campaign} follow={{ state: followStates[campaign.id] ?? { count: 0, followed: false }, viewer }} />
+            ))}
           </div>
         ) : (
           <div className="mt-8 rounded-[14px] border-2 border-dashed border-lineStrong bg-paperMid p-12 text-center">

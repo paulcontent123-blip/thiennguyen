@@ -191,12 +191,12 @@ Người đại diện pháp luật của tổ chức upload chứng từ, ký/a
 
 ### 3.6 Nguồn Lực Phi Tiền Tệ
 
-Nền tảng đầu tiên tại VN cho phép đóng góp 2 chiều: nhận wishlist và đăng ký cung cấp.
+Nhu cầu nguồn lực được bên có nhu cầu gửi qua form và chỉ công khai sau khi Admin kiểm tra, duyệt thủ công. Người đóng góp đăng ký số lượng, thời gian, địa điểm; hệ thống đề xuất ghép với chiến dịch và Admin xác minh kết quả ghép. Tiến độ công khai chỉ tăng theo số lượng đã bàn giao thực tế và được Admin xác minh, không tăng khi mới đăng ký.
 
 - **Hiện vật:** Gạo, sữa, quần áo, thuốc men, thiết bị y tế → quy đổi VND tự động
 - **Ngày công:** Bác sĩ, kỹ sư, giáo viên, IT → ghép với chiến dịch phù hợp
 - **Xe vận chuyển:** Xe tải, xuồng máy → khớp với điểm SOS gần nhất
-- **Claim flow:** Sau khi claim → toast thông báo → hiện SĐT điều phối → ghi nhận báo cáo tác động
+- **Luồng đăng ký:** Đăng ký không đồng nghĩa với bàn giao; thông tin liên hệ chỉ hiển thị cho người có quyền điều phối. Admin xác minh kết quả ghép và bàn giao trước khi ghi nhận tác động.
 
 ---
 
@@ -712,8 +712,8 @@ flowchart LR
 | ID | Tên Use Case | Actor chính | Trạng thái |
 |---|---|---|---|
 | UC-DON-01 | Ủng hộ bằng tiền mặt qua VietQR | Nhà hảo tâm | 🟢 UI / 🟡 backend |
-| UC-DON-02 | Ủng hộ từ số dư Ví nội bộ | Nhà hảo tâm | 🟢 UI / 🔴 backend |
-| UC-DON-03 | Nạp tiền vào Ví | Nhà hảo tâm | 🟡 |
+| UC-DON-02 | Phân bổ số dư ví riêng cho chiến dịch sau khi nạp | Nhà hảo tâm | 🔴 Chưa có backend ví/ledger |
+| UC-DON-03 | Nạp tiền vào ví riêng, chưa gắn campaign | Nhà hảo tâm | 🔴 Chưa có backend ví/ledger |
 | UC-DON-04 | Mở app ngân hàng qua deep link (VCB/TCB/MBBank/Momo) | Nhà hảo tâm | 🟡 |
 | UC-DON-05 | Đối soát Webhook ngân hàng & cập nhật giao dịch | Ngân hàng (actor phụ) | 🟡 (mô phỏng) |
 | UC-DON-06 | Nhận & tải biên nhận điện tử (PDF, hash SHA-256) | Nhà hảo tâm | 🟢 UI / 🟡 backend |
@@ -723,12 +723,17 @@ flowchart LR
 
 | ID | Tên Use Case | Actor chính | Trạng thái |
 |---|---|---|---|
-| UC-RES-01 | Đăng ký đóng góp hiện vật (gạo, sữa, thuốc men…) | Nhà hảo tâm / Doanh nghiệp | 🟢 UI / 🔴 backend |
-| UC-RES-02 | Đăng ký đóng góp ngày công / kỹ năng chuyên môn | Nhà hảo tâm / Doanh nghiệp | 🟢 UI / 🔴 backend |
-| UC-RES-03 | Đăng ký cung cấp xe vận chuyển | Nhà hảo tâm / Doanh nghiệp | 🟢 UI / 🔴 backend |
-| UC-RES-04 | Claim vật phẩm từ Wishlist chiến dịch | Nhà hảo tâm | 🟢 |
-| UC-RES-05 | Đăng ký nhận hỗ trợ theo kỹ năng (ghép TNV ↔ chiến dịch) | Nhà hảo tâm | 🟢 UI / 🔴 backend |
-| UC-RES-06 | Liên hệ điều phối xe vận chuyển gần điểm SOS | Nhà hảo tâm | 🟢 |
+| UC-RES-00 | Gửi đề xuất nhu cầu; Admin kiểm tra và duyệt trước khi công khai | Bên có nhu cầu / Admin | 🔴 Chưa có luồng duyệt nhu cầu |
+| UC-RES-01 | Đăng ký khả năng đóng góp hiện vật, số lượng, thời gian và địa điểm | Nhà hảo tâm / Doanh nghiệp | 🟡 Có đăng ký; chưa đủ bước Admin xác minh |
+| UC-RES-02 | Đăng ký ngày công / kỹ năng, thời gian và địa điểm | Nhà hảo tâm / Doanh nghiệp | 🟡 Có đăng ký; chưa đủ bước Admin xác minh |
+| UC-RES-03 | Đăng ký cung cấp phương tiện, số chuyến và phạm vi | Nhà hảo tâm / Doanh nghiệp | 🟡 Có đăng ký; chưa đủ bước Admin xác minh |
+| UC-RES-04 | Đăng ký đóng góp cho nhu cầu đã được duyệt; chưa ghi nhận hoàn thành | Nhà hảo tâm / Doanh nghiệp | 🟡 Có đăng ký; cần đổi luồng giữ chỗ hiện tại |
+| UC-RES-05 | Đăng ký tham gia nhu cầu kỹ năng đã duyệt | Nhà hảo tâm / Doanh nghiệp | 🟡 Có đăng ký; thiếu Admin duyệt ghép |
+| UC-RES-06 | Đăng ký phương tiện cho nhu cầu đã duyệt; tách khỏi điều phối SOS | Nhà hảo tâm / Doanh nghiệp | 🟡 Cần tách luồng SOS |
+| UC-RES-07 | Xem đề xuất ghép nguồn lực ↔ campaign và xác minh kết quả ghép | Admin | 🔴 Chưa có luồng Admin duyệt ghép |
+| UC-RES-08 | Xác minh số lượng bàn giao thực tế và công bố tiến độ | Admin | 🔴 Chưa có luồng Admin xác minh bàn giao |
+
+**Quyết định Tech Lead:** Nhu cầu chưa duyệt không được xuất hiện trong wishlist công khai. Đăng ký/ghép chỉ là cam kết hoặc đề xuất; chỉ số lượng bàn giao đã được Admin xác minh mới tính vào tiến độ và impact. Thời hạn giữ chỗ 48 giờ trong bản triển khai hiện tại chưa được xác nhận là quy tắc nghiệp vụ. Nút “Nạp ví” là nạp vào số dư ví riêng để phân bổ sau, không phải chuyển thẳng vào campaign.
 
 ### Module E — SOS & Cứu trợ khẩn cấp (`UC-SOS`)
 
@@ -782,7 +787,7 @@ flowchart LR
 | ID | Tên Use Case | Actor chính | Trạng thái |
 |---|---|---|---|
 | UC-ACC-01 | Xem Dashboard tổng quan cá nhân | Nhà hảo tâm | 🟢 |
-| UC-ACC-02 | Quản lý Ví & phân bổ (chọn CD cụ thể/wishlist/định kỳ/giao phó hệ thống) | Nhà hảo tâm | 🟢 UI / 🔴 backend |
+| UC-ACC-02 | Nạp ví riêng rồi chủ động phân bổ số dư vào campaign | Nhà hảo tâm | 🔴 Chưa có ví/ledger thật |
 | UC-ACC-03 | Xem & lọc Lịch sử giao dịch | Nhà hảo tâm | 🟢 |
 | UC-ACC-04 | Theo dõi tiến trình dòng tiền của giao dịch cá nhân | Nhà hảo tâm | 🟢 |
 | UC-ACC-05 | Xem & tải Kho chứng nhận | Nhà hảo tâm | 🟢 |
@@ -939,17 +944,19 @@ flowchart LR
   7. Người dùng hoàn tất chuyển khoản trên app ngân hàng (ngoài phạm vi hệ thống).
   8. Ngân hàng gửi Webhook biến động số dư về hệ thống (UC-DON-05) → giao dịch chuyển trạng thái "completed", khớp với `tx_ref`.
   9. Hệ thống cập nhật Cashflow Tree công khai của chiến dịch + gửi biên nhận PDF qua email (UC-DON-06) + đẩy thông báo push cho người dùng.
-- **Luồng thay thế:** Chọn tab "Từ ví" → dùng số dư ví nội bộ, xác nhận ngay không cần QR (UC-DON-02). Chọn tab "Vật phẩm" → chuyển sang luồng claim wishlist (UC-RES-04).
+- **Luồng thay thế dự kiến:** Chọn "Từ ví" → dùng số dư đã đối soát, tạo bút toán phân bổ riêng (UC-DON-02); backend ví chưa có nên không được xác nhận thành công ngay từ UI. Chọn "Vật phẩm" → chuyển sang form đăng ký cho nhu cầu đã duyệt (UC-RES-04), không coi bấm đăng ký là đã bàn giao.
 - **Ngoại lệ:** Hết thời gian chờ webhook / không khớp `tx_ref` → giao dịch treo ở trạng thái "pending" (cần cơ chế đối soát thủ công ở Admin Portal — hiện chưa có UI riêng cho việc này, đây là gap 🔴).
 - **Hậu điều kiện:** Giao dịch được ghi nhận vào `transactions`, Cashflow Tree công khai cập nhật realtime, người ủng hộ có biên nhận trong Kho chứng nhận (UC-ACC-05).
 - **Quy tắc nghiệp vụ đã cập nhật:** Chiến dịch loại "Kết nối" (partner) không áp dụng tách 90/10. Tiền vẫn đi qua tài khoản trung tâm VEA để đối soát, sau đó được phân bổ cho đối tác thụ hưởng theo hồ sơ được duyệt.
 
 #### UC-DON-02 — Ủng hộ từ số dư Ví nội bộ
-- Actor chính: Nhà hảo tâm. Tab "Từ ví" trong `donate-modal`: chọn mức tiền trong số dư hiển thị → "Xác nhận từ ví →" → trừ ví, ghi nhận giao dịch ngay lập tức, không qua bước quét QR ngân hàng.
-- **Tiền điều kiện:** Ví phải có số dư (nạp qua UC-DON-03).
+- Actor chính: Nhà hảo tâm. Người dùng chọn campaign và số tiền muốn phân bổ từ ví riêng; hệ thống chỉ ghi nhận khoản ủng hộ sau khi kiểm tra số dư khả dụng, campaign hợp lệ và tạo bút toán trừ ví thành công. Không quét QR ngân hàng lần nữa cho bước phân bổ.
+- **Tiền điều kiện:** Tiền nạp đã được đối soát và ghi có qua UC-DON-03. Chưa có backend ví/ledger; không được coi thao tác UI là giao dịch hoàn thành.
 
 #### UC-DON-03 — Nạp tiền vào Ví
-- Actor chính: Nhà hảo tâm. Từ `panel-wallet` trong Tài khoản, bấm "+ Nạp tiền" → mở `vietqr-modal` với mục đích nạp ví (không gắn với chiến dịch cụ thể) → cùng luồng VietQR như UC-DON-01 bước 5–8, nhưng tiền được cộng vào `wallet_balance` thay vì giải ngân trực tiếp cho chiến dịch.
+- **Quyết định Tech Lead:** Đây là nạp tiền vào ví riêng của người dùng để **phân bổ sau**, không phải lối tắt ủng hộ trực tiếp một campaign.
+- **Luồng dự kiến:** Nhà hảo tâm chọn số tiền nạp → hệ thống tạo mã tham chiếu riêng cho khoản nạp và hiển thị kênh thanh toán phù hợp → chỉ khi ngân hàng xác nhận, hệ thống mới ghi bút toán tăng số dư chưa phân bổ. Mỗi lần phân bổ sau đó tạo bút toán riêng liên kết campaign; không dùng trực tiếp `wallet_balance` như nguồn sự thật duy nhất.
+- **Trạng thái:** Đã chốt ý nghĩa nghiệp vụ, **chưa triển khai ví thật**. Chưa được chốt đơn vị giữ tiền/quyền cung ứng ví, cơ chế hoàn/rút tiền, phí, hạn mức, sổ cái và đối soát; phải chốt với pháp lý/tài chính trước khi bật nạp tiền thật.
 
 #### UC-DON-04 — Mở app ngân hàng qua deep link
 - Actor chính: Nhà hảo tâm. Trong `vietqr-modal`, bấm 1 trong 4 nút ngân hàng (Vietcombank/Techcombank/MBBank/Momo) → mở app tương ứng với thông tin chuyển khoản đã điền sẵn (số TK, số tiền, nội dung). Prototype hiện chỉ hiển thị toast mô phỏng; production cần cấu hình deep link scheme riêng từng ngân hàng.
@@ -976,26 +983,39 @@ flowchart LR
 ### MODULE D — NGUỒN LỰC PHI TIỀN TỆ
 
 #### UC-RES-01 — Đăng ký đóng góp hiện vật
-- **Actor chính:** Nhà hảo tâm hoặc Doanh nghiệp
-- **Luồng sự kiện chính:** Vào `pg-donate-items` → chọn tab "Hiện vật" (`switchResOffer('item')`) → chọn Loại hiện vật (Gạo/Sữa/Mì tôm/Quần áo/Chăn màn/Thuốc men/Thiết bị y tế/Khác), nhập Số lượng, chọn Tỉnh/Khu vực → hệ thống tự tính giá trị quy đổi VND (readonly) → bấm "Xác nhận đóng góp".
-- **Hậu điều kiện:** Điểm đóng góp được tạo, chờ ghép với wishlist chiến dịch phù hợp (🔴 backend matching engine cần xây ở Phase 1).
+- **Actor chính:** Nhà hảo tâm hoặc Doanh nghiệp.
+- **Tiền điều kiện:** Nếu đăng ký từ wishlist, nhu cầu đã được Admin duyệt và đang mở.
+- **Luồng chính:** Chọn nhu cầu/loại hiện vật; nhập số lượng, thời gian và địa điểm có thể bàn giao, thông tin liên hệ → gửi đăng ký → hệ thống đề xuất campaign/nhu cầu phù hợp → Admin xác minh kết quả ghép → sau bàn giao, Admin đối chiếu số lượng thực nhận.
+- **Hậu điều kiện:** Đăng ký không tự làm tăng tiến độ hoặc impact. Chỉ số lượng bàn giao đã được Admin xác minh mới được cộng; giá trị quy đổi VND (nếu có) tách khỏi cashflow tiền.
 
 #### UC-RES-02 — Đăng ký đóng góp ngày công / kỹ năng
-- Chọn tab "Ngày công/Kỹ năng" → chọn Chuyên môn (Bác sĩ/Kỹ sư/Giáo viên/IT/Nấu ăn/Lái xe/Khác), Số ngày công, Thời gian có thể, Khu vực → "Xác nhận ngày công". Hệ thống ghép với chiến dịch phù hợp theo khu vực + nhu cầu.
+- Chọn nhu cầu kỹ năng đã được Admin duyệt; khai báo chuyên môn, số ngày công có thể đóng góp, thời gian, địa điểm và liên hệ. Hệ thống chỉ **đề xuất** ghép theo nhu cầu/khu vực; Admin xác minh ghép và xác nhận số ngày công thực tế sau triển khai. Đăng ký không tự tạo impact.
 
 #### UC-RES-03 — Đăng ký cung cấp xe vận chuyển
-- Chọn tab "Xe vận chuyển" → Loại phương tiện (xe tải nhỏ/vừa/lớn, xuồng máy, ô tô 7 chỗ), Số chuyến, Xuất phát từ, Phạm vi → "Xác nhận cung cấp xe". Khớp với điểm SOS/chiến dịch gần nhất theo bán kính.
+- Chọn nhu cầu phương tiện đã được Admin duyệt; khai báo loại xe, số chuyến, thời gian có thể, điểm xuất phát, phạm vi và liên hệ. Hệ thống đề xuất ghép với campaign; Admin xác minh ghép và số chuyến thực tế sau bàn giao. Điều phối xe cho SOS thuộc luồng SOS riêng, không tự suy ra từ đăng ký nguồn lực này.
 
 #### UC-RES-04 — Claim vật phẩm từ Wishlist
-- **Actor chính:** Nhà hảo tâm
-- **Luồng sự kiện chính:** Xem lưới wishlist (`res-items` / `wishlist-grid`) → chọn vật phẩm cần → bấm claim (`claimResource(type, name)`) → toast xác nhận → hệ thống hiện SĐT điều phối để liên hệ giao nhận → ghi nhận vào báo cáo tác động cá nhân (UC-ACC-06).
-- Có thể claim trực tiếp trong `donate-modal` tab "Vật phẩm" khi đang xem 1 chiến dịch cụ thể.
+- **Actor chính:** Nhà hảo tâm/Doanh nghiệp. **Tiền điều kiện:** Nhu cầu đã được Admin duyệt, còn mở và còn số lượng cần nhận.
+- **Luồng chính:** Xem wishlist → chọn nhu cầu → khai báo số lượng có thể đóng góp, thời gian, địa điểm bàn giao và liên hệ → gửi đăng ký → hệ thống đề xuất ghép campaign → Admin kiểm tra và xác nhận ghép → tổ chức thực hiện tiếp nhận → Admin xác minh số lượng bàn giao thực tế.
+- **Hậu điều kiện:** Đăng ký không đồng nghĩa với claim thành công hay đóng góp hoàn tất; không công khai SĐT điều phối và không cộng impact/tiến độ ở bước đăng ký. Có thể truy cập form này từ trang chi tiết campaign.
+- **Ngoại lệ:** Nhu cầu đã đủ/đóng hoặc đăng ký vượt số lượng còn lại → từ chối hoặc yêu cầu điều chỉnh. Thời hạn giữ chỗ 48 giờ hiện có trong code **chưa được Tech Lead chốt**.
 
 #### UC-RES-05 — Đăng ký nhận hỗ trợ theo kỹ năng (TNV nhận việc)
-- Xem tab "Ngày công/Kỹ năng" trong `res-volunteer`, lọc theo hạng mục (Y tế/Xây dựng/Dạy học/Nấu ăn) → xem danh sách chiến dịch cần TNV → liên hệ tham gia.
+- Xem nhu cầu kỹ năng đã duyệt, chọn mục phù hợp và khai báo năng lực, số ngày công, thời gian, địa điểm. Hệ thống đề xuất ghép; Admin xác minh ghép. Chỉ ngày công thực tế đã được xác minh mới tính vào tiến độ nguồn lực.
 
 #### UC-RES-06 — Liên hệ điều phối xe vận chuyển gần điểm SOS
-- Xem tab "Xe vận chuyển" → mỗi thẻ xe hiển thị số chuyến sẵn sàng, mức độ khẩn cấp → bấm "📞 Liên hệ điều phối" (`claimResource('transport', name)`) → toast xác nhận kết nối.
+- **Phạm vi cần tách:** UC này thuộc điều phối SOS, không phải quy trình đăng ký đóng góp nguồn lực cho campaign. Nếu nhu cầu xe phát sinh từ campaign, dùng UC-RES-03 rồi chuyển Admin xác minh ghép; nếu phát sinh từ điểm SOS, chuyển sang luồng điều phối cứu trợ và quyền Admin tương ứng. Không hiển thị liên hệ riêng tư công khai.
+
+#### UC-RES-00 — Đề xuất và duyệt nhu cầu nguồn lực
+- **Actor:** Bên có nhu cầu điền form; Admin xét duyệt. **Mục tiêu:** Chỉ công khai lời kêu gọi nguồn lực đã được kiểm tra thủ công.
+- **Luồng chính:** Bên có nhu cầu nhập campaign, loại nguồn lực, đơn vị, số lượng cần, khu vực, thời gian, mô tả và đầu mối nhận → gửi duyệt → Admin kiểm tra tính hợp lệ, có thể yêu cầu bổ sung/từ chối/duyệt và ghi người, thời gian, lý do → chỉ nhu cầu đã duyệt mới hiện trên wishlist.
+- **Trạng thái đề xuất:** `draft/pending_review/needs_revision/approved/rejected/closed`; đây là **yêu cầu thiết kế**, không phải trạng thái đã có trong DB hiện tại.
+
+#### UC-RES-07 — Admin xác minh đề xuất ghép
+- **Actor:** Admin. Sau khi có đăng ký, hệ thống đề xuất nhu cầu/campaign tương ứng; Admin kiểm tra loại, số lượng, thời gian, địa điểm và liên hệ thực tế trước khi xác nhận hoặc từ chối ghép. Lưu quyết định, lý do, thời điểm và người duyệt. Chưa ghép thì chưa được coi là bàn giao.
+
+#### UC-RES-08 — Admin xác minh bàn giao và cập nhật tiến độ
+- **Actor:** Admin; bên giao/bên nhận cung cấp chứng cứ. Admin đối chiếu số lượng đăng ký, số lượng thực nhận, ngày/địa điểm/biên bản nếu có; xác nhận số lượng thực nhận hoặc ghi thất bại/hủy và lý do. Hệ thống tính `tiến độ = tổng số lượng thực nhận đã được Admin xác minh / số lượng nhu cầu đã duyệt`, không cộng phần chỉ đăng ký hoặc mới ghép. Ví dụ nhu cầu 100 cuốn vở, bàn giao được xác minh 50 cuốn → hiển thị **50/100**. Cần chống xác minh trùng và không cho vượt số lượng mục tiêu.
 
 ---
 
@@ -1142,12 +1162,9 @@ Truy cập qua `pg-account`, 7 panel điều hướng bằng `switchAccPanel`.
 
 #### UC-ACC-02 — Quản lý Ví & phân bổ ⭐
 - **Actor chính:** Nhà hảo tâm
-- **Luồng sự kiện chính:** Panel "Ví & Phân bổ" hiển thị số dư chưa phân bổ → người dùng chọn 1 trong 4 phương thức phân bổ:
-  1. **Chọn chiến dịch cụ thể** → điều hướng `pg-campaigns` để browse.
-  2. **Mua vật phẩm Wishlist** → điều hướng `pg-donate-items` (UC-RES-04).
-  3. **Ủng hộ định kỳ hàng tháng** → thiết lập trừ tự động mỗi tháng, báo cáo gửi email (🔴 backend recurring payment — gap Phase 1).
-  4. **Giao phó hệ thống phân bổ** → thuật toán tự ưu tiên phân bổ vào chiến dịch cần nhất (🔴 gap — cần thuật toán matching ở Phase 2/3).
-- Ngoài ra có thể "+ Nạp tiền" (UC-DON-03) hoặc "Xem lịch sử nạp".
+- **Quyết định Tech Lead:** “Nạp ví” là nạp vào số dư riêng để phân bổ **sau**, không phải ủng hộ thẳng vào campaign. Tiền nạp chưa phân bổ không được tính là tiền campaign đã nhận.
+- **Luồng dự kiến:** Xem số dư chưa phân bổ và lịch sử bút toán → nạp tiền qua UC-DON-03, chờ ngân hàng xác nhận → chủ động chọn campaign và số tiền phân bổ → hệ thống kiểm tra số dư/điều kiện campaign và ghi bút toán phân bổ riêng.
+- **Ngoài phạm vi đã chốt:** Mua vật phẩm wishlist bằng ví, ủng hộ định kỳ và giao phó hệ thống tự phân bổ chưa có quy tắc pháp lý/đối soát/thuật toán đủ để triển khai.
 
 #### UC-ACC-03 — Xem & lọc Lịch sử giao dịch
 - Panel "Lịch sử giao dịch": lọc theo Tất cả/Tiền mặt/Vật phẩm/Hoàn thành.
@@ -1196,7 +1213,7 @@ Truy cập qua `pg-account`, 7 panel điều hướng bằng `switchAccPanel`.
 - **Hậu điều kiện:** Doanh nghiệp có con số cụ thể để ra quyết định cam kết ngân sách matching fund → dẫn tới UC-CORP-02.
 
 #### UC-CORP-05 — Đăng ký đóng góp nguồn lực phi tiền tệ (doanh nghiệp)
-- Mục 3 "Non-monetary Support": xem danh sách đóng góp hiện vật/xe/ngày công chuyên môn đã ghi nhận, quy đổi giá trị VND; bấm "Đăng ký nguồn lực mới" → mở lại `corporate-modal` hoặc luồng UC-RES-01/02/03.
+- Mục 3 "Non-monetary Support": doanh nghiệp xem nhu cầu **đã được Admin duyệt**, khai báo nguồn lực/số lượng, thời gian và địa điểm có thể bàn giao theo UC-RES-01/02/03. Hệ thống đề xuất ghép, Admin xác minh kết quả ghép và số lượng bàn giao; chỉ phần thực nhận đã xác minh mới vào impact/ESG. Giá trị VND quy đổi, nếu có, không phải doanh thu tiền mặt.
 
 #### UC-CORP-06 — Xem ESG Hub Dashboard mẫu
 - Mục 4 "Annual ESG Hub": dashboard mẫu hiển thị Tổng chi CSR, Người thụ hưởng, Phạm vi hoạt động (số tỉnh), số SDG Targets đạt được; gắn nhãn chuẩn GRI 413-1, GRI 203-1, UN SDG 1/3/4/17.
@@ -1376,7 +1393,7 @@ Tài liệu này bao phủ:
 | Chiến dịch & tổ chức | UC-C01–C04 | Tạo/gửi chiến dịch; KYC tổ chức; cập nhật nội dung/bằng chứng; đóng cổng. |
 | Tài chính & tuân thủ | UC-F01–F08 | Maker; VAT; Checker; publish cashflow; hash; báo cáo; ESG; masking/quyền riêng tư. |
 | SOS & cứu trợ | UC-S01–S11 | OTP SOS; GPS; ảnh/trust score; publish/pending; volunteer; đội cứu trợ; đăng nhập; status; alert; xử lý/đóng SOS; tạo CD khẩn cấp. |
-| Nguồn lực phi tiền tệ | UC-R01–R06 | Đăng ký hiện vật; kỹ năng; xe; xem nhu cầu; claim/kết nối; bàn giao/impact. |
+| Nguồn lực phi tiền tệ | UC-R00–R06 | Đề xuất nhu cầu → Admin duyệt công khai → người đóng góp đăng ký → hệ thống đề xuất ghép → Admin xác minh ghép và bàn giao → tiến độ thực nhận. |
 | Doanh nghiệp/ESG | UC-E01–E06 | Xem giải pháp; co-branded; matching fund; nguồn lực/nhân sự; ESG hub; tư vấn. |
 | Quản trị | UC-AD01–AD05 | Dashboard; duyệt campaign; KYC; hàng đợi giải ngân; SOS command center. |
 | Hệ thống | UC-X01–X03 | Realtime; email/push; lưu trữ tệp/audit. |
@@ -1571,15 +1588,15 @@ Tài liệu này bao phủ:
 ### UC-A06 — Quản lý ví và phân bổ số dư
 
 - **Actor:** A02, A06.
-- **Mục tiêu:** Nạp tiền vào ví và phân bổ số dư cho campaign/vật phẩm.
-- **Trạng thái:** P0/P1; phần top-up dùng lại UC-D01/D02; recurring/auto-allocation là P2/P3.
+- **Mục tiêu:** Nạp tiền vào ví riêng để phân bổ sau, không tự gắn campaign khi nạp.
+- **Trạng thái:** Ý nghĩa nghiệp vụ đã được Tech Lead chốt; chưa có ví/ledger production. Recurring/auto-allocation vẫn là phạm vi chưa chốt.
 - **Luồng chính:**
   1. Người dùng mở “Ví & Phân bổ”, xem số dư chưa phân bổ và lịch sử nạp.
-  2. Chọn “Nạp tiền”, nhập số tiền và thực hiện UC-D01/D02.
-  3. Chọn campaign cụ thể, wishlist, hoặc giao hệ thống phân bổ vào nhu cầu ưu tiên.
-  4. Hệ thống kiểm tra số dư, tạo giao dịch trừ ví và cập nhật campaign/impact.
-- **Ngoại lệ:** Số dư không đủ, campaign đóng, wishlist hết nhu cầu hoặc giao dịch ví đang pending → không trừ tiền hoặc hoàn tác giao dịch.
-- **Điểm cần chốt:** UI có “ủng hộ định kỳ” và “thuật toán tự phân bổ” nhưng tài liệu chưa nêu API, lịch chạy, hủy và hoàn tiền.
+  2. Chọn “Nạp tiền”, tạo mã tham chiếu nạp ví riêng; chỉ ghi có số dư sau khi ngân hàng xác nhận.
+  3. Ở thao tác riêng sau đó, người dùng chọn campaign và số tiền phân bổ từ số dư khả dụng.
+  4. Hệ thống ghi bút toán trừ ví/liên kết khoản phân bổ với campaign và cập nhật số dư; không coi khoản nạp chưa phân bổ là tiền đã quyên góp cho campaign.
+- **Ngoại lệ:** Nạp tiền còn pending, số dư không đủ, campaign không nhận đóng góp hoặc giao dịch bị lặp → không ghi nhận phân bổ; có đối soát và xử lý hoàn theo chính sách được duyệt.
+- **Điểm cần chốt trước triển khai thật:** Chủ thể giữ tiền và tính pháp lý của ví, ledger, hoàn/rút tiền, hạn mức, đa tiền tệ, quyền điều chỉnh số dư; “mua wishlist”, định kỳ và tự phân bổ vẫn chưa có quy tắc được duyệt.
 
 ### UC-A07 — Xem và lọc lịch sử giao dịch
 
@@ -2029,12 +2046,18 @@ Tài liệu này bao phủ:
 
 ## 6.7. Nguồn lực phi tiền tệ
 
+### UC-R00 — Đề xuất và duyệt nhu cầu nguồn lực
+
+- **Actor:** Bên có nhu cầu gửi form; Admin xác minh và quyết định. Bên có nhu cầu có thể là chủ campaign, nhưng quyền gửi của chủ campaign cá nhân/đơn vị khác cần xác định khi triển khai.
+- **Luồng chính:** Khai báo campaign, loại nguồn lực, số lượng/đơn vị, khu vực, thời gian, mục đích và đầu mối nhận → gửi duyệt → Admin kiểm tra thủ công, yêu cầu sửa/từ chối/duyệt có ghi lý do và audit → chỉ nhu cầu đã duyệt mới công khai trên wishlist.
+- **Ngoại lệ:** Hồ sơ thiếu, campaign không hợp lệ hoặc nhu cầu trùng → không công khai. Trạng thái duyệt nhu cầu là yêu cầu mới, chưa có trong schema hiện tại.
+
 ### UC-R01 — Đăng ký đóng góp hiện vật
 
 - **Actor:** A02/A04/A06; A03 điều phối.
 - **Mục tiêu:** Ghi nhận gạo, sữa, quần áo, thuốc, thiết bị y tế và các hiện vật khác.
 - **Trạng thái:** P0 form/P1 persistence; bảng `resources` type `item`.
-- **Luồng chính:** Người dùng chọn Hiện vật, nhập loại, số lượng và khu vực; hệ thống tính/quy đổi `value_vnd`, tạo resource `available`, thông báo điểm tiếp nhận/điều phối và cho phép ghép wishlist/SOS.
+- **Luồng chính:** Người dùng chọn nhu cầu đã được Admin duyệt hoặc khai báo hiện vật sẵn có; nhập số lượng, thời gian, địa điểm có thể bàn giao và liên hệ. Hệ thống lưu đăng ký, đề xuất ghép campaign; Admin xác minh ghép. Chỉ sau khi Admin xác minh bàn giao thực tế mới ghi số lượng hoàn thành/impact; giá trị VND chỉ là ước tính riêng, không tự tính vào tiền quyên góp.
 - **Ngoại lệ:** Số lượng âm, mặt hàng không được nhận, thiếu khu vực hoặc không xác định được giá trị → yêu cầu bổ sung/đưa vào manual review.
 
 ### UC-R02 — Đăng ký ngày công/kỹ năng
@@ -2042,7 +2065,7 @@ Tài liệu này bao phủ:
 - **Actor:** A04/A06.
 - **Mục tiêu:** Cung cấp bác sĩ, kỹ sư, giáo viên, IT, nấu ăn, lái xe hoặc chuyên môn khác.
 - **Trạng thái:** P0/P1; `resources.type=skill`.
-- **Luồng chính:** Nhập chuyên môn, số ngày công, ngày có thể và khu vực/bán kính; hệ thống tạo hồ sơ sẵn sàng, quy đổi VND theo bảng giá/policy và ghép với campaign/SOS phù hợp.
+- **Luồng chính:** Nhập chuyên môn, số ngày công, thời gian và địa điểm có thể tham gia; hệ thống lưu đăng ký và đề xuất ghép với nhu cầu đã duyệt. Admin xác minh kết quả ghép và số ngày công thực tế trước khi tính tiến độ/impact. Quy đổi VND, nếu có, không nhập vào cashflow tiền.
 - **Ngoại lệ:** Ngày đã qua, kỹ năng thiếu xác minh hoặc không có nhu cầu khớp → giữ available và thông báo chờ ghép.
 
 ### UC-R03 — Đăng ký xe/phương tiện vận chuyển
@@ -2050,7 +2073,7 @@ Tài liệu này bao phủ:
 - **Actor:** A04/A05/A06.
 - **Mục tiêu:** Cung cấp xe tải, xuồng máy, ô tô và số chuyến/phạm vi hoạt động.
 - **Trạng thái:** P0/P1; `resources.type=transport`.
-- **Luồng chính:** Nhập loại phương tiện, số chuyến, nơi xuất phát và phạm vi; hệ thống tạo resource, quy đổi VND, ghép với điểm SOS/campaign gần nhất và cập nhật trạng thái.
+- **Luồng chính:** Nhập phương tiện, số chuyến, thời gian có thể, nơi xuất phát và phạm vi; hệ thống đề xuất ghép campaign có nhu cầu đã duyệt; Admin xác minh ghép và số chuyến thực tế. Điều phối xe cho SOS là luồng riêng, không tự động xác nhận từ đăng ký này.
 - **Ngoại lệ:** Xe không còn sẵn sàng, phạm vi không hợp lệ hoặc trùng lịch → không ghép; thông báo điều phối.
 
 ### UC-R04 — Xem và lọc nhu cầu nguồn lực
@@ -2058,7 +2081,7 @@ Tài liệu này bao phủ:
 - **Actor:** A01/A02/A04/A05/A06.
 - **Mục tiêu:** Tìm hiện vật cần nhận, kỹ năng đang cần và phương tiện sẵn sàng.
 - **Trạng thái:** P0/P1.
-- **Luồng chính:** Người dùng mở `pg-donate-items`, chọn tab Vật phẩm, Ngày công/Kỹ năng hoặc Xe vận chuyển; lọc theo loại/kỹ năng/khu vực; xem số lượng cần, đã claim, địa điểm, mức khẩn cấp và thông tin điều phối phù hợp.
+- **Luồng chính:** Người dùng mở `pg-donate-items`, lọc nhu cầu **đã được Admin duyệt** theo loại/kỹ năng/khu vực; xem số lượng mục tiêu, số lượng **đã bàn giao và được Admin xác minh**, địa điểm và trạng thái. Số lượng đăng ký hoặc đang ghép phải hiển thị riêng, không cộng vào tiến độ hoàn thành.
 - **Ngoại lệ:** Nhu cầu hết hoặc resource vừa được claim → cập nhật realtime/ẩn khỏi danh sách; không hiển thị thông tin liên hệ riêng tư công khai.
 
 ### UC-R05 — Claim wishlist/vật phẩm cần nhận
@@ -2067,24 +2090,24 @@ Tài liệu này bao phủ:
 - **Mục tiêu:** Cam kết cung cấp một phần vật phẩm cho wishlist.
 - **Trạng thái:** P0 demo/P1 persistence; bảng `resources`.
 - **Luồng chính:**
-  1. Người dùng chọn item, xem `need`, `claimed`, đơn vị và địa điểm.
-  2. Chọn “Claim item này” hoặc claim trong modal Ủng hộ → Vật phẩm.
-  3. Hệ thống kiểm tra nhu cầu còn lại và tạo claim gắn donor/resource.
-  4. Hệ thống gửi địa điểm giao hàng/SĐT điều phối qua email hoặc khu vực được bảo vệ.
-- **Ngoại lệ:** Đã đủ nhu cầu, item bị khóa, người dùng chưa xác minh hoặc claim đồng thời vượt số lượng → từ chối/điều chỉnh số lượng.
+  1. Người dùng chọn nhu cầu đã duyệt, xem số lượng cần và số lượng thực nhận đã xác minh.
+  2. Khai báo số lượng có thể đóng góp, thời gian, địa điểm và liên hệ rồi gửi đăng ký.
+  3. Hệ thống kiểm tra số lượng còn có thể nhận và **đề xuất** ghép với campaign; Admin xác minh kết quả ghép.
+  4. Thông tin liên hệ chỉ trao đổi trong khu vực được phân quyền; sau bàn giao, Admin xác minh số lượng thực nhận theo UC-R06.
+- **Ngoại lệ:** Nhu cầu chưa duyệt/đã đủ, đăng ký đồng thời vượt số lượng hoặc bàn giao một phần → từ chối/điều chỉnh; không tính đăng ký là đã donate. Quy tắc giữ chỗ 48 giờ chưa được xác nhận.
 
 ### UC-R06 — Kết nối, bàn giao và ghi nhận tác động nguồn lực
 
-- **Actor:** A02/A04/A05/A06; A03/A10.
+- **Actor:** A03 (Admin) xác minh; A02/A04/A05/A06 cung cấp, A10/bên nhận cung cấp bằng chứng.
 - **Mục tiêu:** Hoàn tất vòng đời nguồn lực và đưa giá trị vào báo cáo impact.
 - **Trạng thái:** P0 claim toast/P1/P2 persistence; một phần Suy ra.
 - **Luồng chính:**
-  1. Hệ thống ghép resource với campaign/SOS và cung cấp contact điều phối cho bên liên quan.
-  2. Bên cung cấp xác nhận lịch/địa điểm; bên nhận xác nhận bàn giao.
-  3. Hệ thống cập nhật `claimed/matched/delivered`, số lượng và giá trị VND thực tế.
-  4. Lưu ảnh/biên bản nếu có, cập nhật donor certificate và impact.
-- **Ngoại lệ:** Không giao được, số lượng lệch hoặc hủy claim → mở lại nhu cầu/điều chỉnh giá trị và audit lý do.
-- **Điểm cần chốt:** Chưa có API/status model chi tiết cho claim, delivery, contact masking và chứng nhận vật phẩm.
+  1. Hệ thống đề xuất ghép đăng ký với campaign/nhu cầu đã duyệt; Admin kiểm tra và xác nhận hoặc từ chối kết quả ghép.
+  2. Bên cung cấp và bên nhận hẹn thời gian, địa điểm; cung cấp biên bản/ảnh hoặc chứng cứ phù hợp.
+  3. Admin xác minh thủ công số lượng thực nhận, ghi người/thời gian/kết quả/lý do và xử lý phần chưa giao.
+  4. Chỉ số lượng thực nhận đã được Admin xác minh mới cập nhật tiến độ wishlist, báo cáo tác động và chứng nhận (nếu triển khai).
+- **Ngoại lệ:** Không giao được, giao một phần, hàng không đạt chất lượng, hủy đăng ký hoặc ghép sai → không cộng phần chưa được xác minh; lưu audit và mở lại nhu cầu tương ứng.
+- **Điểm cần chốt:** Bằng chứng tối thiểu và thời điểm xác nhận của bên nhận, cơ chế xử lý tranh chấp, chính sách giữ chỗ và đơn vị đo/định giá.
 
 ## 6.8. Doanh nghiệp và ESG
 
@@ -2127,7 +2150,7 @@ Tài liệu này bao phủ:
 - **Actor:** A06; A03/A05 điều phối.
 - **Mục tiêu:** Đưa sản phẩm, xe, chuyên môn hoặc nhân viên của DN vào hoạt động thực địa.
 - **Trạng thái:** P0/P1/P2; liên kết UC-R01–R03/R06.
-- **Luồng chính:** Doanh nghiệp chọn nguồn lực, nhập số lượng/ngày công/phạm vi, hệ thống quy đổi VND, ghép với project/SOS, ghi nhận nhân sự tham gia và cập nhật dashboard impact/ESG.
+- **Luồng chính:** Doanh nghiệp chọn nhu cầu đã được Admin duyệt, khai báo nguồn lực, số lượng/ngày công, thời gian và địa điểm; hệ thống đề xuất ghép campaign, Admin xác minh ghép. Sau bàn giao, Admin kiểm tra số lượng/ngày công thực tế; chỉ phần được xác minh mới cập nhật impact/ESG. Luồng SOS được điều phối riêng.
 - **Ngoại lệ:** Không có nhu cầu phù hợp hoặc nguồn lực hết hạn → giữ chờ ghép/đề xuất nhu cầu khác.
 
 ### UC-E05 — Xem và xuất ESG Dashboard của doanh nghiệp
@@ -2321,7 +2344,7 @@ Tài liệu kỹ thuật chưa nêu route chính thức cho: CRUD `resources` v�
 | `disbursements` | UC-F01–F04, UC-P03/P07, UC-AD04 |
 | `sos_reports` | UC-S01–S04, UC-S09–S11, UC-P05, UC-AD05 |
 | `rescue_teams` | UC-S06–S10, UC-P05, UC-AD05 |
-| `resources` | UC-R01–R06, UC-E04 |
+| `resource_needs`, `resource_offers`, `resource_claims` | UC-R00–R06, UC-E04; cần bổ sung trạng thái duyệt nhu cầu và xác minh Admin theo quyết định mới |
 | `notifications` | UC-A11, UC-X02 |
 | `financial_hashes` | UC-F05–F07, UC-P06/P07, UC-A09 |
 
@@ -2725,21 +2748,18 @@ Trust score nên được dùng để phân loại và ưu tiên xử lý, khôn
 ### 6.6. Nguồn lực phi tiền tệ
 
 ```text
-Cá nhân/Tổ chức → Tạo resource offer
-→ Kiểm duyệt/Chuẩn hóa
-→ Available
-→ Reserve quantity
-→ Claim
-→ Giao nhận
-→ Xác nhận
-→ Impact record
+Bên có nhu cầu → Gửi form nhu cầu → Admin duyệt → Wishlist công khai
+→ Người đóng góp đăng ký số lượng/thời gian/địa điểm
+→ Hệ thống đề xuất ghép campaign → Admin xác minh ghép
+→ Bàn giao thực tế → Admin xác minh số lượng nhận
+→ Cập nhật tiến độ và impact theo số lượng thực nhận đã xác minh
 ```
 
 #### Quy tắc bắt buộc
 
-- Claim phải khóa số lượng trong một khoảng thời gian.
-- Không cho phép tổng số lượng claim vượt số lượng khả dụng.
-- Có trạng thái hủy, hết hạn, đã giao và giao thất bại.
+- Nhu cầu chưa được Admin duyệt không công khai; đăng ký/ghép chưa làm tăng tiến độ.
+- Không cho phép lượng cam kết hoặc lượng đã xác minh vượt nhu cầu; cách giữ chỗ và thời hạn (kể cả mốc 48 giờ) vẫn cần Tech Lead chốt.
+- Có trạng thái hủy, từ chối ghép, bàn giao một phần, giao thất bại và đã xác minh; lưu audit người duyệt, thời gian, lý do.
 - Hiện vật, ngày công và phương tiện cần quy tắc định giá riêng.
 
 ### 6.7. Đóng chiến dịch và báo cáo
@@ -2978,18 +2998,20 @@ Phần này chuyển các điểm D1–D12 thành câu hỏi có thể dùng tro
 
 **Dẫn chứng:** Tài liệu cho phép hiện vật, ngày công và xe vận chuyển; hiện vật được quy đổi VND tự động [dòng 157](./ThienNguyen_TechSpec_v2.md:157). Schema có `quantity`, `value_vnd`, `province`, `status` [dòng 177](./ThienNguyen_TechSpec_v2.md:177).
 
-**Vì sao cần xác nhận:** Chưa có cách định giá, đơn vị đo, thời hạn, chất lượng, người duyệt, cách giữ chỗ và xác nhận giao nhận. Nếu không có reservation, nhiều người có thể claim cùng một nguồn lực.
+**Tech Lead đã chốt:** Admin kiểm tra và duyệt nhu cầu trước khi công khai; hệ thống đề xuất ghép người đóng góp với campaign nhưng Admin phải xác minh kết quả ghép; chỉ số lượng bàn giao thực tế được Admin xác minh mới cập nhật tiến độ. Ví dụ nhu cầu 100 cuốn vở, xác minh nhận 50 cuốn thì tiến độ là 50/100.
+
+**Vẫn cần xác nhận:** Đơn vị đo, định giá, chất lượng, chứng cứ bàn giao, cách xử lý đăng ký đồng thời và thời hạn giữ chỗ. Mốc 48 giờ hiện có trong code không được coi là quyết định của Tech Lead.
 
 **Câu hỏi chốt cho Tech Lead:**
 
 1. Bảng giá VND do Admin cấu hình hay do người cung cấp khai báo?
 2. Giá trị nguồn lực có được tính vào mục tiêu/cashflow tài chính không?
-3. Claim có khóa số lượng và thời hạn giữ chỗ không?
-4. Ai xác nhận đã giao và đã nhận?
+3. Đăng ký có khóa số lượng tạm thời và thời hạn giữ chỗ không? Nếu có, bao lâu?
+4. Bên nhận cung cấp bằng chứng gì để Admin xác minh số lượng thực nhận?
 5. Hàng lỗi, hết hạn, claim hủy hoặc giao thất bại xử lý thế nào?
 6. Nguồn lực y tế hoặc phương tiện có cần điều kiện xác minh riêng không?
 
-**Khuyến nghị:** Tách ledger nguồn lực khỏi ledger tiền; dùng reservation để chống claim vượt tồn kho.
+**Khuyến nghị:** Tách ledger nguồn lực khỏi ledger tiền; kiểm soát đăng ký đồng thời để không nhận vượt nhu cầu và phân biệt đăng ký/ghép/đã bàn giao được xác minh.
 
 ### D11. Minh bạch và quyền xem dữ liệu
 
@@ -3784,26 +3806,25 @@ Một Admin có được đồng thời xác minh giấy phép, duyệt campaign
 
 ## LUỒNG C — NGUỒN LỰC PHI TIỀN TỆ
 
-### Bảng hoạt động (chiều "Cho")
+### Bảng hoạt động theo quyết định Tech Lead
 
-| # | Actor | Hành động | Hệ thống xử lý | Input | Output |
-|---|---|---|---|---|---|
-| 1 | Donor/Doanh nghiệp | Mở `pg-donate-items`, chọn tab loại (Hiện vật/Ngày công/Xe) | `switchResOffer(type)` | — | Form tương ứng hiện ra |
-| 2 | Donor/Doanh nghiệp | Điền loại, số lượng, tỉnh/khu vực → "Xác nhận đóng góp" | Tự tính giá trị quy đổi VND (bảng giá quy đổi) → insert `resources` | Loại, số lượng, khu vực | Bản ghi `resources(status=available)` |
+| # | Actor | Hành động | Kết quả | Có tính vào tiến độ? |
+|---|---|---|---|---|
+| 1 | Bên có nhu cầu | Gửi form nêu campaign, nguồn lực, số lượng/đơn vị, thời gian, địa điểm nhận | Đề xuất chờ kiểm tra | Không |
+| 2 | Admin | Kiểm tra thủ công; duyệt, yêu cầu bổ sung hoặc từ chối | Chỉ nhu cầu đã duyệt mới hiện trong wishlist công khai | Không |
+| 3 | Nhà hảo tâm/Doanh nghiệp | Chọn nhu cầu đã duyệt, đăng ký số lượng có thể đóng góp, thời gian và địa điểm bàn giao | Đăng ký đang chờ ghép/xác minh | Không |
+| 4 | Hệ thống | Đề xuất ghép đăng ký với campaign/nhu cầu phù hợp | Kết quả ghép đề xuất | Không |
+| 5 | Admin | Kiểm tra thủ công, xác nhận hoặc từ chối kết quả ghép | Lịch/đầu mối điều phối được cung cấp trong phạm vi phân quyền | Không |
+| 6 | Bên giao/bên nhận | Thực hiện bàn giao và cung cấp bằng chứng, số lượng thực nhận | Hồ sơ bàn giao chờ xác minh | Không |
+| 7 | Admin | Đối chiếu và xác minh số lượng thực nhận, ghi audit | Cập nhật tiến độ/impact theo số lượng thực nhận đã xác minh | **Có** |
 
-### Bảng hoạt động (chiều "Nhận")
+Ví dụ: lời kêu gọi 100 cuốn vở; đăng ký 50 cuốn vẫn là 0/100 cho đến khi Admin xác minh đã nhận 50 cuốn, khi đó hiển thị 50/100. Dữ liệu đăng ký/đề xuất ghép có thể hiển thị riêng nhưng không được gắn nhãn “đã quyên góp”.
 
-| # | Actor | Hành động | Hệ thống xử lý | Input | Output |
-|---|---|---|---|---|---|
-| 3 | Donor khác | Xem danh sách wishlist/nguồn lực sẵn có, bấm "Claim" | `claimResource(type, name)` | `resourceId` | `resources.status = claimed`, gán `claimer_id` |
-| 4 | Hệ thống | Hiện toast xác nhận + hiện SĐT điều phối | — | — | Thông tin liên hệ để hẹn giao nhận |
-| 5 | 2 bên | Giao nhận diễn ra ngoài hệ thống (thực địa) | *(Không có bước xác nhận "đã giao xong" trong demo)* | — | — |
-| 6 | Hệ thống | Ghi nhận vào Impact cá nhân của claimer | Aggregation theo hệ số quy đổi | `resources` đã claim | Số liệu hiển thị ở panel Impact |
-
-### Cần xác nhận với Tech Lead
-- **Bảng giá quy đổi hiện vật → VND:** ai duy trì (cố định theo danh mục, hay cập nhật theo thời giá thị trường)? Nếu sai giá quy đổi sẽ ảnh hưởng trực tiếp đến báo cáo ESG.
-- **Thiếu bước "xác nhận đã giao/nhận":** hiện luồng dừng lại ở "claimed", không có trạng thái "delivered/completed" được xác nhận bởi cả 2 bên → rủi ro khai khống đóng góp (claim xong không giao thật vẫn tính vào Impact). Có cần thêm bước xác nhận 2 chiều không?
-- **Race condition khi claim:** nếu 2 người bấm claim cùng 1 item gần như đồng thời, hệ thống xử lý theo cơ chế nào (lock DB, transaction, hay ai bấm trước thắng)?
+### Cần chốt thêm trước khi triển khai
+- Nguồn lực tự đăng sẵn nhưng chưa chọn nhu cầu sẽ đi qua khâu Admin duyệt nguồn lực hay chỉ xét lúc ghép?
+- Thời hạn giữ chỗ (48 giờ trong code hiện tại), mức khóa số lượng và cách xử lý hai đăng ký đồng thời.
+- Bằng chứng bàn giao tối thiểu, bên nào được xác nhận thực nhận, cách xử lý giao thiếu/hàng không đạt chất lượng/tranh chấp.
+- Chính sách định giá VND phục vụ ESG; giá trị nguồn lực không được nhập vào cashflow tiền mặt.
 
 ---
 
@@ -3814,8 +3835,8 @@ Một Admin có được đồng thời xác minh giấy phép, duyệt campaign
 | # | Actor | Hành động | Hệ thống xử lý | Input | Output |
 |---|---|---|---|---|---|
 | 1 | Donor | Mở `pg-account`, panel Dashboard | Aggregate query theo `user_id` trên `transactions`/`resources` | `user_id` | 4 chỉ số tổng quan + hoạt động gần đây |
-| 2 | Donor | Vào panel Ví, bấm "+ Nạp tiền" | Kích hoạt lại luồng VietQR (Luồng A bước 5-9) nhưng không gắn `campaignId` | `amount` | `wallet_balance` tăng (xem lưu ý pháp lý ở mục dưới) |
-| 3 | Donor | Chọn 1 trong 4 cách phân bổ ví (chọn CD cụ thể / mua wishlist / định kỳ / giao phó hệ thống) | Điều hướng tương ứng, hoặc (định kỳ/giao phó) cần thuật toán riêng | Lựa chọn | Ví trừ dần theo lựa chọn |
+| 2 | Donor | Vào panel Ví, bấm "+ Nạp tiền" | Tạo giao dịch nạp ví riêng, không gắn `campaignId`; chờ xác nhận ngân hàng và ghi bút toán số dư | `amount`, mã tham chiếu nạp | Số dư chưa phân bổ chỉ tăng khi đối soát thành công; ví thật chưa được triển khai |
+| 3 | Donor | Sau đó chọn campaign và số tiền phân bổ từ ví | Kiểm tra số dư, ghi bút toán trừ ví và liên kết campaign; không tự phân bổ lúc nạp | Lựa chọn | Khoản phân bổ riêng, không nhầm với giao dịch nạp; các cách định kỳ/tự động vẫn chưa được chốt |
 | 4 | Donor | Vào panel Lịch sử, lọc theo loại | Query `transactions`/`resources` theo `user_id` + filter | Bộ lọc | Danh sách giao dịch |
 | 5 | Donor | Vào panel Theo dõi tiền, chọn 1 giao dịch | `showTracking(id)` render lại Cashflow Tree của campaign liên quan | `transactionId` | Cashflow Tree hiển thị lại |
 | 6 | Donor | Vào panel Chứng nhận, tải PDF/Certificate/Link | Xuất file từ dữ liệu `transactions`/`resources` đã hoàn tất | `txId` | File tải về |
@@ -3896,17 +3917,17 @@ Phạm vi: mọi thứ Khách vãng lai làm được, **cộng thêm** toàn b�
 
 - 🟢/🟡 Ủng hộ tiền mặt qua VietQR (chọn mức tiền, xem preview phân bổ 90/10, quét QR, mở deep link ngân hàng) — `UC-DON-01, 04`
 - 🟢/🔴 Ủng hộ từ số dư Ví nội bộ — `UC-DON-02`
-- 🟡 Nạp tiền vào Ví — `UC-DON-03`
+- 🔴 Nạp tiền vào ví riêng, chờ đối soát rồi phân bổ sau — `UC-DON-03` (chưa có backend ví/ledger)
 - 🟢/🟡 Nhận & tải biên nhận điện tử (PDF, hash SHA-256) — `UC-DON-06`
 - 🟢 Giả lập giao dịch demo (mục đích trình diễn) — `UC-DON-07`
 - 🟢/🔴 Yêu thích / theo dõi chiến dịch — `UC-DISC-05`
-- 🟢/🔴 Đăng ký đóng góp hiện vật / ngày công-kỹ năng / xe vận chuyển — `UC-RES-01, 02, 03`
-- 🟢 Claim vật phẩm từ Wishlist — `UC-RES-04`
+- 🟡 Đăng ký khả năng đóng góp hiện vật / ngày công-kỹ năng / xe vận chuyển; Admin còn phải xác minh ghép và bàn giao — `UC-RES-01, 02, 03`
+- 🟡 Đăng ký đóng góp cho wishlist đã được Admin duyệt; không tự cộng tiến độ — `UC-RES-04`
 - 🟢 Đăng ký nhận hỗ trợ theo kỹ năng (ghép TNV ↔ chiến dịch) — `UC-RES-05`
 - 🟢 Liên hệ điều phối xe vận chuyển gần điểm SOS — `UC-RES-06`
 - 🟢 Đăng ký Tình nguyện viên ứng cứu cá nhân — `UC-SOS-04`
 - 🟢 Xem Dashboard tổng quan cá nhân (4 chỉ số + hoạt động gần đây) — `UC-ACC-01`
-- 🟢/🔴 Quản lý Ví & phân bổ (chọn CD cụ thể / mua wishlist / định kỳ / giao phó hệ thống) — `UC-ACC-02`
+- 🔴 Nạp ví riêng và chủ động phân bổ sau; chưa có backend ví/ledger — `UC-ACC-02`
 - 🟢 Xem & lọc Lịch sử giao dịch — `UC-ACC-03`
 - 🟢 Theo dõi tiến trình dòng tiền của giao dịch cá nhân — `UC-ACC-04`
 - 🟢 Xem & tải Kho chứng nhận — `UC-ACC-05`

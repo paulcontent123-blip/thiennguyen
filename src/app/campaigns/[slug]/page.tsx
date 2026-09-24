@@ -3,9 +3,11 @@ import Image from "next/image";
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { CampaignDetailTabs, CampaignShare } from "@/components/campaigns/campaign-detail-tabs";
+import { CampaignFollowButton } from "@/components/campaigns/campaign-follow-button";
 import { DonationDialog } from "@/components/campaigns/donation-dialog";
 import { SiteHeader } from "@/components/site-header";
 import { type CampaignMedia, type CampaignSeo, type CampaignShareSettings, type CampaignUpdate } from "@/lib/campaigns/content";
+import { getCampaignFollowStates } from "@/lib/campaigns/follows";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -108,6 +110,16 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
     });
   }
 
+  const { data: viewerProfile } = authResult.data.user
+    ? await supabase.from("profiles").select("role").eq("id", authResult.data.user.id).maybeSingle()
+    : { data: null };
+  const viewer = !authResult.data.user ? "guest" : viewerProfile?.role === "donor" ? "donor" : "other";
+  const followStates = await getCampaignFollowStates(
+    supabase,
+    [campaign.id],
+    viewer === "donor" ? authResult.data.user?.id : undefined,
+  );
+
   const status = statusLabels[campaign.status] ?? { label: campaign.status, className: "bg-paperDeep text-inkMid" };
   const campaignType = campaign.campaign_type === "direct" ? "Trực tiếp" : "Kết nối";
   const remainingDays = daysRemaining(campaign.deadline);
@@ -160,12 +172,17 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
                   <div className="text-[13px] font-bold text-chamDeep">{organization?.name ?? "Nhà hảo tâm đã xác minh"}</div>
                   <div className="text-[11.5px] text-lua">✓ Đã xác thực · {isPersonalCampaign ? "Hồ sơ cá nhân hợp lệ" : "Hồ sơ tổ chức hợp lệ"}</div>
                 </div>
-                <a href="#organization" className="ml-auto rounded-[8px] border border-lineStrong px-3 py-1.5 text-xs font-semibold text-inkMid hover:border-son hover:text-son">
-                  {isPersonalCampaign ? "Xem hồ sơ →" : "Xem tổ chức →"}
-                </a>
+                {!isPersonalCampaign && organization ? (
+                  <Link href={`/organizations/${organization.id}`} className="ml-auto rounded-[8px] border border-lineStrong px-3 py-1.5 text-xs font-semibold text-inkMid hover:border-son hover:text-son">
+                    Xem tổ chức →
+                  </Link>
+                ) : null}
               </div>
 
               <h1 className="font-serif text-[30px] font-medium leading-tight text-chamDeep sm:text-[34px]">{campaign.title}</h1>
+              <div className="mt-3">
+                <CampaignFollowButton campaignId={campaign.id} campaignSlug={campaign.slug} initialState={followStates[campaign.id] ?? { count: 0, followed: false }} viewer={viewer} />
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className={`inline-flex items-center gap-1 rounded-[4px] px-2 py-1 text-[11px] font-bold ${status.className}`}>● {status.label}</span>
                 <span className="inline-flex items-center gap-1 rounded-[4px] bg-skySoft px-2 py-1 text-[11px] font-bold text-sky">{campaignType}</span>

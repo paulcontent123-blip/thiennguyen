@@ -1,11 +1,11 @@
 import { SiteHeader } from "@/components/site-header";
 import { RescueApplyModal } from "@/components/rescue/rescue-apply-modal";
-import { SosMapLoader } from "@/components/sos/sos-map-loader";
-import { SosReportList } from "@/components/sos/sos-report-list";
+import { SosBoard, type SosBoardReport } from "@/components/sos/sos-board";
 import { SosReportModal } from "@/components/sos/sos-report-modal";
 import { getCurrentAuth } from "@/lib/auth/server";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
+import type { SosTeamResponse } from "@/lib/sos/team-progress";
 
 const teamStatusLabels: Record<string, { label: string; className: string }> = {
   available: { label: "Sẵn sàng", className: "bg-lua/15 text-lua" },
@@ -13,35 +13,42 @@ const teamStatusLabels: Record<string, { label: string; className: string }> = {
   busy: { label: "Đang bận", className: "bg-nghe/15 text-ngheDeep" },
 };
 
-async function getSosReports() {
+type PublicRescueTeam = {
+  id: string;
+  name: string;
+  resource_types: string[];
+  province: string | null;
+  radius_km: number | null;
+  status: string;
+};
+
+async function getSosReports(): Promise<SosBoardReport[]> {
   if (!hasSupabaseEnv()) return [];
   const supabase = createClient();
-  const { data } = await supabase
-    .from("sos_reports")
-    .select("id, location_text, description, needs, status, photo_url, latitude, longitude, created_at")
-    .order("status", { ascending: true })
-    .order("created_at", { ascending: false })
-    .limit(30);
-  return data ?? [];
+  const [{ data }, { data: responses }] = await Promise.all([
+    supabase.rpc("get_public_sos_reports"),
+    supabase.rpc("get_public_sos_team_responses"),
+  ]);
+  const byReport = new Map<string, SosTeamResponse[]>();
+  for (const row of (responses ?? []) as (SosTeamResponse & { sos_report_id: string })[]) {
+    byReport.set(row.sos_report_id, [
+      ...(byReport.get(row.sos_report_id) ?? []),
+      { team_name: row.team_name, member_kind: row.member_kind, progress: row.progress, updated_at: row.updated_at },
+    ]);
+  }
+  return ((data ?? []) as SosBoardReport[]).map((report) => ({ ...report, team_responses: byReport.get(report.id) ?? [] }));
 }
 
-async function getActiveRescueTeams() {
+async function getActiveRescueTeams(): Promise<PublicRescueTeam[]> {
   if (!hasSupabaseEnv()) return [];
   const supabase = createClient();
-  const { data } = await supabase
-    .from("rescue_teams")
-    .select("id, name, resource_types, province, radius_km, status")
-    .neq("status", "inactive")
-    .order("status", { ascending: true })
-    .order("updated_at", { ascending: false })
-    .limit(10);
-  return data ?? [];
+  const { data } = await supabase.rpc("get_public_rescue_teams");
+  return (data ?? []) as PublicRescueTeam[];
 }
 
 export default async function SosPage() {
   const [{ user }, reports, rescueTeams] = await Promise.all([getCurrentAuth(), getSosReports(), getActiveRescueTeams()]);
   const activeCount = reports.filter((report) => report.status !== "handled").length;
-  const mappedCount = reports.filter((report) => report.latitude != null && report.longitude != null).length;
 
   return (
     <main className="min-h-screen bg-paper">
@@ -77,37 +84,12 @@ export default async function SosPage() {
         </p>
 
         <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_320px]">
-          <div>
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="font-serif text-xl font-semibold text-chamDeep">Bản đồ điểm SOS</h2>
-              <span className="text-xs text-inkSoft">{mappedCount}/{reports.length} báo cáo có toạ độ GPS</span>
-            </div>
-            <SosMapLoader
-              reports={reports.map((report) => ({
-                id: report.id,
-                location_text: report.location_text,
-                description: report.description,
-                needs: report.needs,
-                status: report.status,
-                latitude: report.latitude,
-                longitude: report.longitude,
-                created_at: report.created_at,
-              }))}
-            />
-            <div className="mt-3 flex flex-wrap gap-4 text-xs text-inkMid">
-              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-son" />Khẩn cấp</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-nghe" />Cần hỗ trợ</span>
-              <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-lua" />Đã xử lý</span>
-            </div>
-
-            <h2 className="mb-4 mt-10 font-serif text-xl font-semibold text-chamDeep">{reports.length} báo cáo gần đây</h2>
-            <SosReportList reports={reports} />
-          </div>
+          <SosBoard reports={reports} />
 
           <aside className="flex flex-col gap-5">
             <div className="rounded-[14px] border border-line bg-white p-4">
               <div className="mb-3 flex items-center justify-between">
-                <span className="text-sm font-bold text-chamDeep">🚑 Đội cứu trợ sẵn sàng</span>
+                <span className="text-sm font-bold text-chamDeep">🚑 Đội cứu trợ đã kích hoạt</span>
                 <span className="text-xs font-bold text-lua">{rescueTeams.length} đội</span>
               </div>
               {rescueTeams.length === 0 ? (

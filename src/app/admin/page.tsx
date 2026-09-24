@@ -1,10 +1,13 @@
 import { AdminPortal } from "@/components/admin/admin-portal";
+import { isAdminPanelKey } from "@/lib/admin/panels";
 import { requirePageRole } from "@/lib/auth/server";
 
-export default async function AdminPage() {
+export default async function AdminPage({ searchParams = {} }: { searchParams?: { panel?: string | string[] } }) {
+  const requestedPanel = Array.isArray(searchParams.panel) ? searchParams.panel[0] : searchParams.panel;
+  const initialPanel = isAdminPanelKey(requestedPanel) ? requestedPanel : undefined;
   const { supabase } = await requirePageRole(["admin"], "/admin");
 
-  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes] = await Promise.all([
+  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id, title, owner_type, owner_user_id, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
@@ -57,6 +60,11 @@ export default async function AdminPage() {
       .select("id, company_name, contact_name, contact_email, budget_range, focus_area, interest, status, created_at, handled_at, campaigns(title)")
       .order("created_at", { ascending: false })
       .limit(200),
+    supabase
+      .from("sos_team_alerts")
+      .select("sos_report_id, sos_reports!inner(status)")
+      .eq("response_status", "completed")
+      .in("sos_reports.status", ["urgent", "needs_support"]),
   ]);
 
   const personalProfiles = await Promise.all((personalProfilesRes.data ?? []).map(async (profile) => {
@@ -67,6 +75,8 @@ export default async function AdminPage() {
 
   return (
     <AdminPortal
+      initialPanel={initialPanel}
+      sosAwaitingClosure={new Set((sosCompletedRes.data ?? []).map((row) => row.sos_report_id)).size}
       campaigns={campaignsRes.data ?? []}
       organizations={organizationsRes.data ?? []}
       personalProfiles={personalProfiles}

@@ -8,6 +8,7 @@ import {
   reviewResourceNeed,
   type ResourceAdminResult,
 } from "@/app/admin/resources/actions";
+import { suggestNeedsForOffer } from "@/lib/resources/match-suggestions";
 
 export type AdminResourceNeed = {
   id: string; campaign_id: string; resource_type: "item" | "skill" | "transport";
@@ -18,7 +19,7 @@ export type AdminResourceNeed = {
 export type AdminResourceOffer = {
   id: string; user_id: string; resource_type: "item" | "skill" | "transport"; title: string;
   description: string; quantity: number; unit: string; province: string | null; available_from: string | null;
-  contact_name: string; contact_email: string; contact_phone: string | null; created_at: string;
+  contact_name: string; contact_email: string; contact_phone: string | null; preferred_campaign_id: string | null; created_at: string;
 };
 export type AdminResourceClaim = {
   id: string; need_id: string; contributor_id: string; quantity: number; delivered_quantity: number | null;
@@ -57,6 +58,10 @@ export function AdminResourceWorkflow({ needs, offers, claims, loadError }: { ne
   const received = needs.reduce((total, need) => total + claims
     .filter((claim) => claim.need_id === need.id && claim.status === "delivered")
     .reduce((sum, claim) => sum + Number(claim.delivered_quantity ?? claim.quantity), 0), 0);
+
+  const remainingByNeed = new Map(needs.map((need) => [need.id, need.quantity_needed - claims
+    .filter((claim) => claim.need_id === need.id && ["reserved", "confirmed", "delivered"].includes(claim.status))
+    .reduce((sum, claim) => sum + Number(claim.status === "delivered" ? claim.delivered_quantity ?? claim.quantity : claim.quantity), 0)]));
 
   function run(action: () => Promise<ResourceAdminResult>) {
     setNotice(null);
@@ -150,18 +155,13 @@ export function AdminResourceWorkflow({ needs, offers, claims, loadError }: { ne
       <p className="mt-1 text-sm text-inkMid">Admin chọn nhu cầu phù hợp và xác minh thông tin trước khi tạo lượt ghép.</p>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         {offers.length === 0 ? <p className="rounded-[8px] bg-white p-5 text-sm text-inkSoft">Không có nguồn lực chờ ghép.</p> : offers.map((offer) => {
-          const compatible = matchableNeeds
-            .filter((need) => need.resource_type === offer.resource_type)
-            .sort((a, b) => {
-              const score = (need: AdminResourceNeed) => offer.province && (need.province === offer.province || need.campaign_province === offer.province) ? 1 : 0;
-              return score(b) - score(a);
-            });
+          const compatible = suggestNeedsForOffer(offer, matchableNeeds, remainingByNeed);
           return <form key={offer.id} onSubmit={(event) => submit(event, matchResourceOfferAsAdmin)} className="rounded-[10px] border border-line bg-white p-4">
             <input type="hidden" name="offerId" value={offer.id} />
             <div className="flex items-start justify-between gap-3"><div><h3 className="font-serif text-lg font-semibold text-chamDeep">{typeIcon[offer.resource_type]} {offer.title}</h3><p className="mt-1 text-sm text-inkMid">{fmt.format(offer.quantity)} {offer.unit} · {offer.province || "Chưa rõ khu vực"}</p></div><Status value="available" /></div>
             {offer.description ? <p className="mt-2 text-sm text-inkMid">{offer.description}</p> : null}
             <p className="mt-2 text-xs text-inkSoft">{offer.contact_name} · {offer.contact_email}{offer.contact_phone ? ` · ${offer.contact_phone}` : ""}</p>
-            {compatible.length ? <div className="mt-3 grid grid-cols-[minmax(0,1fr)_100px_auto] gap-2"><select className={field} name="needId">{compatible.map((need, index) => <option key={need.id} value={need.id}>{index === 0 ? "Đề xuất · " : ""}{need.campaign_title}: {need.name}</option>)}</select><input className={field} name="quantity" type="number" min="0.01" max={offer.quantity} step="0.01" required defaultValue={offer.quantity} /><button disabled={pending} className="rounded-[7px] bg-chamDeep px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Xác minh ghép</button></div> : <p className="mt-3 text-xs text-inkSoft">Chưa có nhu cầu đã duyệt còn mở, cùng loại nguồn lực.</p>}
+            {compatible.length ? <OfferMatchPicker suggestions={compatible} offerQuantity={offer.quantity} pending={pending} /> : <p className="mt-3 text-xs text-inkSoft">Chưa có nhu cầu đã duyệt, còn thiếu, cùng loại nguồn lực.</p>}
           </form>;
         })}
       </div>
@@ -176,4 +176,19 @@ export function AdminResourceWorkflow({ needs, offers, claims, loadError }: { ne
       <span className="sr-only">Tổng số lượng đã xác minh: {fmt.format(received)}</span>
     </section>
   </section>;
+}
+
+function OfferMatchPicker({ suggestions, offerQuantity, pending }: { suggestions: ReturnType<typeof suggestNeedsForOffer<AdminResourceNeed>>; offerQuantity: number; pending: boolean }) {
+  const [needId, setNeedId] = useState(suggestions[0].need.id);
+  const selected = suggestions.find((item) => item.need.id === needId) ?? suggestions[0];
+  return <div className="mt-3">
+    <div className="grid grid-cols-[minmax(0,1fr)_100px_auto] gap-2">
+      <select className={field} name="needId" value={selected.need.id} onChange={(event) => setNeedId(event.target.value)}>
+        {suggestions.map((item, index) => <option key={item.need.id} value={item.need.id}>{index === 0 ? "Đề xuất · " : ""}{item.need.campaign_title}: {item.need.name} ({item.score} điểm)</option>)}
+      </select>
+      <input key={selected.need.id} className={field} name="quantity" type="number" min="0.01" max={Math.min(offerQuantity, selected.remaining)} step="0.01" required defaultValue={selected.suggestedQuantity} />
+      <button disabled={pending} className="rounded-[7px] bg-chamDeep px-3 py-2 text-xs font-bold text-white disabled:opacity-50">Xác minh ghép</button>
+    </div>
+    <p className="mt-2 text-xs text-inkSoft">Còn thiếu {fmt.format(selected.remaining)} {selected.need.unit}. Lý do gợi ý: {selected.reasons.join(" · ")}. Chỉ là gợi ý, Admin vẫn xác minh thủ công.</p>
+  </div>;
 }

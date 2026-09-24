@@ -72,7 +72,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       .order("created_at", { ascending: false }),
     supabase
       .from("resource_offers")
-      .select("id, user_id, resource_type, title, description, quantity, unit, province, available_from, contact_name, contact_email, contact_phone, status, created_at")
+      .select("id, user_id, resource_type, title, description, quantity, unit, province, available_from, contact_name, contact_email, contact_phone, preferred_campaign_id, status, created_at")
       .eq("status", "available")
       .order("created_at", { ascending: false }),
     supabase
@@ -96,7 +96,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     id: row.id, user_id: row.user_id, resource_type: row.resource_type as AdminResourceOffer["resource_type"],
     title: row.title, description: row.description ?? "", quantity: Number(row.quantity), unit: row.unit,
     province: row.province, available_from: row.available_from, contact_name: row.contact_name,
-    contact_email: row.contact_email, contact_phone: row.contact_phone, created_at: row.created_at,
+    contact_email: row.contact_email, contact_phone: row.contact_phone, preferred_campaign_id: row.preferred_campaign_id, created_at: row.created_at,
   }));
   const resourceClaims: AdminResourceClaim[] = (resourceClaimsRes.data ?? []).map((row) => {
     const need = relation(row.resource_needs as unknown as { name: string; unit: string; campaigns: { title: string; slug: string } | { title: string; slug: string }[] | null } | { name: string; unit: string; campaigns: { title: string; slug: string } | { title: string; slug: string }[] | null }[] | null);

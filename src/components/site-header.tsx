@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { AuthControls } from "./auth-controls";
 import { CreateCampaignModal } from "./create-campaign-modal";
+import { MobileNav } from "./mobile-nav";
 import { getCurrentAuth } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -41,18 +42,18 @@ export async function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
-      <nav className="mx-auto flex max-w-[1160px] items-center gap-6 px-7 py-3.5">
+      <nav className="relative mx-auto flex max-w-[1160px] items-center gap-3 px-4 py-3 md:gap-6 md:px-7 md:py-3.5">
         <Link href="/" className="flex items-center gap-2 whitespace-nowrap font-serif text-lg font-semibold text-chamDeep">
           <span className="text-xl">&#10084;</span> Thiện Nguyện
         </Link>
-        <div className="flex flex-1 flex-wrap items-center gap-5 text-[13px] font-bold text-inkMid">
+        <div className="hidden flex-1 flex-wrap items-center gap-x-5 gap-y-1 text-[13px] font-bold text-inkMid md:flex">
           {navLinks.map(([label, href]) => (
             <Link key={href} href={href} className="transition hover:text-son">
               {label}
             </Link>
           ))}
         </div>
-        <div className="flex shrink-0 items-center gap-2.5">
+        <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0 md:gap-2.5">
           <Suspense fallback={<div className="h-[38px] w-[92px]" />}>
             <AuthControls
               isAuthenticated={Boolean(user)}
@@ -63,6 +64,7 @@ export async function SiteHeader() {
             />
           </Suspense>
           {canCreateCampaign ? <CreateCampaignModal /> : null}
+          <MobileNav links={navLinks} />
         </div>
       </nav>
     </header>

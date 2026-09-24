@@ -290,7 +290,7 @@ export function AuthControls({ isAuthenticated = false, email, username = "Tài 
           <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-chamDeep text-sm font-bold uppercase text-white">
             {username.trim().charAt(0) || "U"}
           </span>
-          <span className="min-w-0">
+          <span className="hidden min-w-0 sm:block">
             <span className="block truncate text-[13px] font-bold text-chamDeep">{username}</span>
             {roleLabel ? <span className="block truncate text-[11px] text-inkSoft">{roleLabel}</span> : null}
           </span>

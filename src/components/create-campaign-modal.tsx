@@ -73,9 +73,11 @@ export function CreateCampaignModal({
         onClick={() => setOpen(true)}
         disabled={disabled}
         title={disabled ? disabledReason : undefined}
-        className="rounded-[40px] bg-chamDeep px-4 py-2 text-[13px] font-bold text-white transition hover:bg-chamDeep/90 disabled:cursor-not-allowed disabled:opacity-45"
+        aria-label="Tạo chiến dịch"
+        className="whitespace-nowrap rounded-[40px] bg-chamDeep px-3 py-2 text-[13px] font-bold text-white transition hover:bg-chamDeep/90 disabled:cursor-not-allowed disabled:opacity-45 sm:px-4"
       >
-        Tạo chiến dịch
+        <span className="sm:hidden">+ Tạo</span>
+        <span className="hidden sm:inline">Tạo chiến dịch</span>
       </button>
 
       {open && mounted

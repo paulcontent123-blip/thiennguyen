@@ -1,30 +1,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { SiteHeader } from "@/components/site-header";
-import { hasSupabaseEnv } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
-import type { NewsPost } from "@/lib/news/types";
+import { getPublicNews } from "@/lib/public-data";
 import { shouldBypassImageOptimization } from "@/lib/images";
 
 export const dynamic = "force-dynamic";
 
-async function loadNews(): Promise<NewsPost[]> {
-  if (!hasSupabaseEnv()) return [];
-  const { data, error } = await createClient()
-    .from("news_posts")
-    .select("id, slug, title, excerpt, content, category, tags, cover_url, status, author_id, published_at, created_at, updated_at, meta_title, meta_description, focus_keyword, canonical_url")
-    .eq("status", "published")
-    .not("published_at", "is", null)
-    .order("published_at", { ascending: false });
-  if (error) {
-    console.error("Failed to load public news", error);
-    return [];
-  }
-  return (data ?? []) as NewsPost[];
-}
-
 export default async function NewsPage() {
-  const posts = await loadNews();
+  const { posts, stale, error } = await getPublicNews();
   return (
     <main className="min-h-screen bg-paper">
       <SiteHeader />
@@ -34,8 +17,9 @@ export default async function NewsPage() {
           <h1 className="mt-2 font-serif text-3xl font-semibold text-chamDeep sm:text-4xl">Tin tức Thiện Nguyện</h1>
           <p className="mt-3 text-sm leading-7 text-inkMid">Cập nhật hoạt động, câu chuyện cộng đồng và những thay đổi mới nhất từ nền tảng.</p>
         </div>
+        {error ? <div role="status" className="mt-5 rounded-[10px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">{stale ? "Đang dùng dữ liệu dự phòng. " : ""}{error}</div> : null}
         {posts.length === 0 ? (
-          <div className="mt-10 rounded-[14px] border border-line bg-white p-10 text-center text-sm text-inkSoft">Chưa có tin tức được xuất bản.</div>
+          <div className="mt-10 rounded-[14px] border border-line bg-white p-10 text-center text-sm text-inkSoft">{error ? "Tin tức hiện chưa tải được. Vui lòng thử lại sau." : "Chưa có tin tức được xuất bản."}</div>
         ) : (
           <div className="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-3">
             {posts.map((post) => (

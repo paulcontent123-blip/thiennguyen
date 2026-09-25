@@ -1,6 +1,8 @@
 # CHỨC NĂNG THEO ROLE — NỀN TẢNG THIỆN NGUYỆN
 
-> Cập nhật ngày 25/09/2026. Tài liệu mô tả quyền và chức năng đang được triển khai trong dự án.
+> Cập nhật ngày 25/09/2026. Trạng thái được rà soát theo route, Server Action và migration hiện có; cần nghiệm thu thêm trên môi trường Supabase production.
+>
+> Trạng thái: ✅ đã có xử lý trong code/database · 🟡 có một phần hoặc còn phụ thuộc tích hợp/cấu hình/kiểm thử · ⬜ chưa triển khai. “Đã có code” không có nghĩa dịch vụ ngoài đã cấu hình thật.
 
 ## 1. Mô hình phân quyền
 
@@ -21,7 +23,7 @@ Các điểm đã chốt:
 - Tài khoản `org` đại diện cho tổ chức và người đại diện pháp luật.
 - Đội cứu trợ là luồng riêng do Admin quản lý, không tự đăng ký role công khai.
 - Doanh nghiệp đồng hành chưa phải một role riêng; hiện sử dụng form yêu cầu hợp tác.
-- Xác thực người dùng sử dụng email/mật khẩu, Google SSO và email đặt lại mật khẩu; không dùng OTP số điện thoại trong MVP.
+- Xác thực người dùng sử dụng email/mật khẩu và đặt lại mật khẩu qua email; Google OAuth có code nhưng cần bật provider/redirect URL tại Supabase. Không dùng OTP số điện thoại trong MVP.
 
 ---
 
@@ -36,10 +38,10 @@ Các điểm đã chốt:
 - Xem Cashflow Tree, cập nhật thực địa, media và báo cáo công khai.
 - Xem wishlist nguồn lực đã được Admin duyệt.
 - Tạo yêu cầu quyên góp tiền không bắt buộc đăng nhập.
-- Gửi báo cáo SOS ẩn danh.
+- Gửi báo cáo SOS ẩn danh kèm ảnh/vị trí/thông tin liên hệ, chờ Admin duyệt trước khi công khai; chưa xác minh OTP số điện thoại.
 - Gửi yêu cầu hợp tác doanh nghiệp.
 - Đăng ký tài khoản cá nhân hoặc tổ chức.
-- Đăng nhập bằng email/mật khẩu hoặc Google SSO khi provider đã được cấu hình.
+- Đăng nhập bằng email/mật khẩu; Google SSO phụ thuộc cấu hình provider Supabase.
 - Yêu cầu gửi email đặt lại mật khẩu.
 
 ### 2.2. Chức năng không được phép
@@ -60,7 +62,7 @@ Các điểm đã chốt:
 - Xem và cập nhật hồ sơ cá nhân.
 - Đặt lại mật khẩu qua email.
 - Xem lịch sử quyên góp và hoạt động cá nhân.
-- Theo dõi hoặc bỏ theo dõi chiến dịch.
+- Theo dõi hoặc bỏ theo dõi chiến dịch — đã có `UC-DISC-05`.
 
 ### 3.2. Quyên góp tiền
 
@@ -68,7 +70,7 @@ Các điểm đã chốt:
 - Nhận mã tham chiếu giao dịch.
 - Theo dõi trạng thái chờ xác nhận, hoàn thành hoặc cần kiểm tra.
 - Xem và tải biên nhận PDF khi giao dịch đã hoàn thành.
-- Nhận biên nhận qua email nếu dịch vụ email hoạt động.
+- Nhận biên nhận PDF/hash qua email trong code; gửi email thật phụ thuộc API key và domain/from Resend hợp lệ.
 
 ### 3.3. Ví cá nhân
 
@@ -91,7 +93,7 @@ Các điểm đã chốt:
 
 ### 3.5. Nguồn lực phi tiền tệ
 
-- Đăng vật phẩm, kỹ năng hoặc phương tiện đang có.
+- Đăng vật phẩm, kỹ năng hoặc phương tiện đang có; Admin xác minh matching và bàn giao.
 - Chỉnh sửa hoặc hủy nguồn lực khi chưa hoàn tất bàn giao.
 - Chọn nhu cầu công khai trong wishlist để đăng ký đóng góp.
 - Khai báo số lượng, thời gian và địa điểm có thể bàn giao.
@@ -143,9 +145,8 @@ Các điểm đã chốt:
 - Đánh dấu media được phép công khai.
 - Tạo, cập nhật và xóa nhật ký thực địa.
 - Thêm liên kết video dọc 9:16.
-- Cấu hình nội dung chia sẻ và Viral Kit.
-- Sinh poster chiến dịch.
-- Cập nhật nội dung SEO và Schema.org.
+- Quản lý media công khai, nội dung cập nhật, video URL và poster/Viral Kit.
+- Cập nhật metadata chia sẻ/SEO/Schema.org; upload thật phụ thuộc Cloudinary, kiểm tra production phụ thuộc domain đã cấu hình.
 
 ### 4.4. Nhu cầu nguồn lực
 
@@ -171,8 +172,7 @@ Các điểm đã chốt:
 
 - Xem dashboard tất toán chiến dịch.
 - Xem tổng tiền nhận, tổng tiền đã giải ngân và số dư.
-- Xem báo cáo theo chiến dịch.
-- Xem báo cáo quý và báo cáo 6 tháng.
+- Xem báo cáo theo chiến dịch, quý và 6 tháng từ dữ liệu database; báo cáo niêm phong/hash độc lập chưa hoàn chỉnh.
 
 ### 4.7. Giới hạn quyền
 
@@ -203,7 +203,7 @@ Các điểm đã chốt:
 
 ### 5.3. Điều phối SOS
 
-- Nhận cảnh báo SOS do Admin/hệ thống gửi đến.
+- Nhận cảnh báo SOS theo bán kính; backend tạo alert/Realtime, còn cần nghiệm thu subscriber, reconnect và thông báo thiết bị.
 - Xem thông tin cần thiết của nhiệm vụ được giao.
 - Xác nhận đã nhận cảnh báo.
 - Báo đang di chuyển đến hiện trường.
@@ -300,7 +300,7 @@ Các điểm đã chốt:
 - Theo dõi phản hồi và tiến độ xử lý tại hiện trường.
 - Đánh dấu SOS đã được xử lý.
 - Đóng SOS.
-- Tạo chiến dịch khẩn cấp từ một báo cáo SOS.
+- Tạo campaign khẩn cấp từ yêu cầu SOS ẩn danh/có tài khoản, qua Admin và tổ chức đã được duyệt.
 
 ### 6.9. Hợp tác doanh nghiệp và báo cáo
 
@@ -316,7 +316,15 @@ Các điểm đã chốt:
 - Không chỉ dựa vào việc ẩn nút trên giao diện.
 - API dùng Service Role Key chỉ được chạy phía server.
 - Không đưa Service Role Key xuống trình duyệt.
-- Các thao tác duyệt phải lưu người thực hiện, thời gian và lý do khi có.
+- Một số đối tượng có lịch sử trạng thái/người thao tác/thời gian; audit log append-only bao phủ toàn bộ thao tác Admin chưa hoàn thiện.
+
+### Khoảng trống và điều kiện nghiệm thu
+
+- API webhook ngân hàng xác minh chữ ký/chống sự kiện trùng/tự đối soát chưa có; giao dịch tiền mặt hiện do Admin đối soát thủ công.
+- Google OAuth, Resend, Cloudinary, tài khoản nhận tiền và Supabase Realtime cần cấu hình production hợp lệ.
+- Trung tâm thông báo in-app đầy đủ (danh sách, lọc, đánh dấu đã đọc) chưa có; email nghiệp vụ không thay thế chức năng này.
+- Có xuất/in báo cáo ở giao diện, nhưng báo cáo niêm phong/hash server-side và audit trail độc lập chưa hoàn chỉnh.
+- Chưa có bộ kiểm thử E2E tự động bao phủ quyên góp, ví, giải ngân, SOS và nguồn lực.
 
 ---
 

@@ -3879,14 +3879,14 @@ Ví dụ: lời kêu gọi 100 cuốn vở; đăng ký 50 cuốn vẫn là 0/100
 
 <a id="phan-viii"></a>
 # ══════════════════════════════════════
-# PHẦN VIII — DANH SÁCH CHỨC NĂNG THEO ACTOR
+# PHẦN VIII — DANH SÁCH CHỨC NĂNG THEO ACTOR (CẬP NHẬT 25/09/2026)
 # ══════════════════════════════════════
 
 # DANH SÁCH CHỨC NĂNG THEO PHẠM VI TỪNG ACTOR
 
-> Tài liệu này tổ chức lại toàn bộ 66 use case đã đặc tả (`ThienNguyen_UseCase_Spec.md`) theo chiều **Actor trước — Chức năng sau**, để dùng làm checklist khi cấu hình phân quyền (RBAC) thực tế. Mỗi actor liệt kê **toàn bộ chức năng nằm trong phạm vi của họ**, bao gồm cả chức năng kế thừa từ actor thấp hơn (ví dụ Donor kế thừa mọi thứ Khách vãng lai làm được).
+> Bảng dưới đây cập nhật trạng thái triển khai của use case theo code, migration, route và Server Action hiện có; đây không thay thế nghiệm thu trên Supabase production. Danh sách use case gốc vẫn được giữ để truy vết, nhưng các trạng thái cũ trong những phần lịch sử phía trên không còn là nguồn trạng thái hiện hành.
 >
-> Ký hiệu trạng thái: 🟢 đã có trong prototype · 🟡 có UI nhưng backend là demo/giả lập · 🔴 chưa có, là gap cần xây ở Phase 1+. Mã `UC-xxx` tham chiếu tới đặc tả chi tiết trong `ThienNguyen_UseCase_Spec.md`.
+> Ký hiệu: ✅ đã có xử lý ứng dụng/database · 🟡 đã có một phần hoặc còn cần cấu hình/tích hợp/kiểm thử vận hành · ⬜ chưa triển khai. “Đã có code” không đồng nghĩa với đã tích hợp ngân hàng hoặc đã nghiệm thu production.
 
 ---
 
@@ -3894,20 +3894,20 @@ Ví dụ: lời kêu gọi 100 cuốn vở; đăng ký 50 cuốn vẫn là 0/100
 
 Phạm vi: mọi thông tin **công khai**, đúng tinh thần "minh bạch không cần xin phép".
 
-- 🟢 Xem trang chủ (hero, thống kê mạng lưới, đối tác) — `UC-DISC-01`
-- 🟢 Tìm kiếm & lọc chiến dịch (từ khóa, 63 tỉnh/thành, 7 hạng mục, sắp xếp) — `UC-DISC-02, 03`
-- 🟢 Xem chi tiết 1 chiến dịch: Cashflow Tree 3 tầng, Nhật ký, Video 9:16, Viral Kit — `UC-DISC-04`
-- 🟢 Xem hồ sơ công khai của tổ chức — `UC-DISC-06`
-- 🟢 Xem trang Giới thiệu (sứ mệnh, pháp lý, đội ngũ, so sánh, media kit) — `UC-DISC-07`
-- 🟢 Xem bản đồ SOS + chi tiết từng điểm SOS — `UC-SOS-01, 02`
-- 🟢 Xem toàn bộ 6 tab báo cáo Minh bạch (sao kê năm/quý/bán niên/theo chiến dịch/người thụ hưởng/tổ chức) — `UC-TRANS-01…06`
-- 🟡 Xuất CSV từ số liệu thật và in/lưu PDF; chưa có file niêm phong server-side — `UC-TRANS-07`
-- 🟢 Phát tín hiệu SOS (chỉ cần xác minh OTP tại chỗ, không cần tài khoản trước đó) — `UC-SOS-03`
-- 🟢 Đăng ký tài khoản (Cá nhân / Doanh nghiệp-Tổ chức) — `UC-AUTH-01`
-- 🟢 Đăng nhập (Email/Mật khẩu, Google) — `UC-AUTH-02, 03`
-- 🟢 Xem trang "Đồng hành cùng quỹ" + gửi form liên hệ tư vấn ESG — không cần tài khoản — `UC-CORP-01, 02`
+- ✅ Xem trang chủ và số liệu công khai lấy từ database; danh sách campaign/news có cache ngắn — `UC-DISC-01`
+- ✅ Tìm kiếm/lọc danh sách chiến dịch theo điều kiện hỗ trợ — `UC-DISC-02, 03`
+- ✅ Xem chi tiết campaign, cover/media, cập nhật thực địa, Cashflow Tree và chia sẻ — `UC-DISC-04`
+- ✅ Xem hồ sơ công khai của tổ chức — `UC-DISC-06`
+- ✅ Xem trang giới thiệu — `UC-DISC-07`
+- ✅ Xem bản đồ và chi tiết SOS công khai — `UC-SOS-01, 02`
+- ✅ Xem báo cáo minh bạch, báo cáo chiến dịch/quý/bán niên từ dữ liệu đã đối soát — `UC-TRANS-01…06`
+- 🟡 In/lưu PDF và xuất CSV có ở giao diện báo cáo; chưa có gói báo cáo niêm phong/hash server-side — `UC-TRANS-07`
+- 🟡 Gửi SOS ẩn danh, kèm vị trí/ảnh/thông tin liên hệ và chờ Admin duyệt; chưa có OTP xác minh số điện thoại — `UC-SOS-03`
+- ✅ Đăng ký và đăng nhập email/mật khẩu; luồng Google OAuth có code nhưng còn phụ thuộc cấu hình provider Supabase — `UC-AUTH-01…03`
+- ✅ Yêu cầu đặt lại mật khẩu qua email (không gắn mã UC ở danh mục hiện hành; `UC-AUTH-08` là xác minh hồ sơ cá nhân)
+- ✅ Gửi yêu cầu hợp tác doanh nghiệp — `UC-CORP-01, 02`
 
-**Không được làm:** ủng hộ tiền/vật phẩm, xem tài khoản cá nhân, tạo chiến dịch, vào Admin Portal.
+**Không được làm:** quản lý ví hoặc lịch sử tài khoản, đăng ký/điều phối nguồn lực, tạo hay sở hữu chiến dịch, vào Admin Portal. Khách vẫn có thể tạo yêu cầu quyên góp tiền công khai và gửi SOS ẩn danh.
 
 ---
 
@@ -3915,26 +3915,17 @@ Phạm vi: mọi thông tin **công khai**, đúng tinh thần "minh bạch khô
 
 Phạm vi: mọi thứ Khách vãng lai làm được, **cộng thêm** toàn bộ tương tác cần danh tính.
 
-- 🟢/🟡 Ủng hộ tiền mặt qua VietQR (chọn mức tiền, xem preview phân bổ 90/10, quét QR, mở deep link ngân hàng) — `UC-DON-01, 04`
-- 🟢 Ủng hộ từ số dư Ví nội bộ — `UC-DON-02`
-- 🟢 Nạp tiền vào ví riêng, Admin đối soát và chủ động phân bổ sau — `UC-DON-02, 03`
-- 🟢 Nhận biên nhận PDF sinh phía server, hash SHA-256 và email có retry/idempotency — `UC-DON-06`
-- 🟢 Giả lập giao dịch demo (mục đích trình diễn) — `UC-DON-07`
-- 🟢/🔴 Yêu thích / theo dõi chiến dịch — `UC-DISC-05`
-- 🟡 Đăng ký khả năng đóng góp hiện vật / ngày công-kỹ năng / xe vận chuyển; Admin còn phải xác minh ghép và bàn giao — `UC-RES-01, 02, 03`
-- 🟡 Đăng ký đóng góp cho wishlist đã được Admin duyệt; không tự cộng tiến độ — `UC-RES-04`
-- 🟢 Đăng ký nhận hỗ trợ theo kỹ năng (ghép TNV ↔ chiến dịch) — `UC-RES-05`
-- 🟢 Liên hệ điều phối xe vận chuyển gần điểm SOS — `UC-RES-06`
-- 🟢 Đăng ký Tình nguyện viên ứng cứu cá nhân — `UC-SOS-04`
-- 🟢 Xem Dashboard tổng quan cá nhân (4 chỉ số + hoạt động gần đây) — `UC-ACC-01`
-- 🟢 Nạp ví riêng và chủ động phân bổ sau; số dư được khóa trong RPC chống chi hai lần — `UC-ACC-02`
-- 🟢 Xem & lọc Lịch sử giao dịch — `UC-ACC-03`
-- 🟢 Theo dõi tiến trình dòng tiền của giao dịch cá nhân — `UC-ACC-04`
-- 🟢 Xem & tải Kho chứng nhận — `UC-ACC-05`
-- 🟢 Xem Impact cá nhân (số liệu tác động quy đổi) — `UC-ACC-06`
-- 🟢/🔴 Cập nhật thông tin cá nhân & tùy chọn thông báo — `UC-ACC-07`
-- 🟢/🔴 Xem Trung tâm thông báo, lọc theo loại, đánh dấu đã đọc — `UC-NOTI-01, 02, 03` *(lưu ý: hiện chưa có lối vào UI — xem phần Gap ở mục 10)*
-- 🔴 Đăng xuất tài khoản — `UC-AUTH-07` (chưa tồn tại trong demo)
+- 🟡 Tạo giao dịch quyên góp, sinh VietQR và theo dõi trạng thái; xác nhận tiền hiện do Admin đối soát thủ công — `UC-DON-01, 04`
+- ✅ Quyên góp từ số dư ví — `UC-DON-02`
+- ✅ Nạp ví, Admin xác nhận, phân bổ vào campaign, khóa số dư/chống chi trùng và hoàn tác — `UC-DON-02, 03; UC-ACC-02`
+- ✅ Tạo PDF biên nhận phía server, SHA-256 và gửi email có trạng thái/retry — `UC-DON-06`; việc gửi thật cần Resend/domain hoạt động
+- ✅ Yêu thích/theo dõi và bỏ theo dõi chiến dịch — `UC-DISC-05`
+- ✅ Đăng offer nguồn lực, claim nhu cầu đã được Admin duyệt, theo dõi đề xuất matching — `UC-RES-01…04`; Admin vẫn là người xác minh match và bàn giao
+- ✅ Đăng ký hỗ trợ kỹ năng và điều phối xe gần SOS — `UC-RES-05, 06`
+- ✅ Đăng ký TNV cứu trợ cá nhân theo luồng hồ sơ — `UC-SOS-04`
+- ✅ Xem trang tài khoản, lịch sử giao dịch, tiến trình và chứng nhận — `UC-ACC-01, 03…06`
+- 🟡 Cập nhật hồ sơ; tùy chọn/thông báo ứng dụng chưa thành một trung tâm thông báo đầy đủ — `UC-ACC-07; UC-NOTI-01…03`
+- ✅ Đăng xuất qua menu tài khoản — `UC-AUTH-07`
 
 Nhà hảo tâm có thể mở **Cổng chiến dịch cá nhân** tại `/personal-campaigns`. Quyền này không được cấp ngay khi đăng ký: người dùng phải khai báo hồ sơ tại `personal_profiles`, upload giấy tờ vào bucket Storage riêng tư `personal-verification`, chờ Admin chuyển `verification_status` sang `approved`, sau đó mới được tạo bản nháp và gửi campaign qua vòng `pending_review`.
 
@@ -3954,14 +3945,10 @@ Nhà hảo tâm có thể mở **Cổng chiến dịch cá nhân** tại `/perso
 
 > Lưu ý đã phân tích ở phần trước: hiện tại Doanh nghiệp **chưa có tài khoản/role thật** trong demo — mọi chức năng dưới đây chạy qua form liên hệ (`corporate-modal`), không qua `auth-modal`. Về bản chất dòng tiền, Corporate gần với Donor (bên cho) hơn là Organization (bên nhận-chi).
 
-- 🟢 Xem trang "Đồng hành cùng quỹ" (hero, trust strip, bull-list nav 4 mục) — `UC-CORP-01`
-- 🟢 Gửi yêu cầu tư vấn ESG (tên DN, người liên hệ, ngân sách CSR, lĩnh vực ưu tiên) — `UC-CORP-02`
-- 🟢 Xem danh sách công trình cần tài trợ trọn gói (Co-Branded Impact) — `UC-CORP-03`
-- 🟢 Mô phỏng Matching Fund (chọn hệ số X1/X2/X3, xem số tiền đối ứng) — `UC-CORP-04`
-- 🟢/🔴 Đăng ký đóng góp nguồn lực phi tiền tệ ở quy mô doanh nghiệp — `UC-CORP-05`
-- 🟢 Xem ESG Hub Dashboard mẫu (GRI 413-1/203-1, UN SDG 1/3/4/17) — `UC-CORP-06`
-- 🟢/🔴 Xuất Gói ESG ZIP / Xuất PDF báo cáo ESG — `UC-CORP-07`
-- 🔴 Dashboard nội bộ theo dõi từng nhân viên đóng góp (mô tả trong tài liệu gốc mục Matching Fund, **chưa có bất kỳ UI/tài khoản nào** để chạy tính năng này)
+- ✅ Xem trang hợp tác và gửi inquiry — `UC-CORP-01, 02`
+- 🟡 Xem/mô phỏng matching và thông tin công trình; chưa phải quy trình cam kết/ghi nhận đối ứng tài chính đầy đủ — `UC-CORP-03, 04`
+- 🟡 Hệ thống đã có bảng liên kết inquiry với campaign và thao tác Admin; báo cáo ESG tự tổng hợp, giao diện quản trị/báo cáo hoàn chỉnh và kiểm chứng xuất file chưa khép kín — `UC-CORP-05…07`
+- ⬜ Dashboard theo dõi đóng góp từng nhân viên chưa có
 
 **Không được làm:** tạo chiến dịch gây quỹ công khai, nhận tiền qua nền tảng, KYC theo quy trình tổ chức từ thiện.
 
@@ -3971,14 +3958,13 @@ Nhà hảo tâm có thể mở **Cổng chiến dịch cá nhân** tại `/perso
 
 Phạm vi: chủ sở hữu 1 pháp nhân trên nền tảng, chịu trách nhiệm pháp lý về chiến dịch mình tạo.
 
-- 🟢/🔴 Đăng ký tài khoản tổ chức và upload giấy phép hoạt động — `UC-AUTH-01` (nhánh Doanh nghiệp/Tổ chức)
-- 🟢/🔴 Tạo chiến dịch mới — chọn loại Trực tiếp (phân bổ 90/10) hoặc Kết nối (VEA tiếp nhận tập trung và phân bổ cho đối tác) — `UC-CAMP-01`
-- 🟢/🔴 Đăng bài cập nhật / nhật ký tiến độ chiến dịch — `UC-CAMP-02`
-- 🟢 Đóng cổng chiến dịch & xem dashboard tổng kết — `UC-CAMP-03`
-- 🟢 Xuất CSV thật và in/lưu PDF khi đóng cổng — `UC-CAMP-04`
-- 🟢/🔴 Xuất Gói ESG ZIP khi đóng cổng — `UC-CAMP-05`
-- 🟢 Upload chứng từ, ký/approval, gửi giải trình và theo dõi hồ sơ giải ngân — `UC-DISB-01, 04`
-- 🟢 Xem trạng thái KYC, chiến dịch và giải ngân trong cổng tổ chức
+- ✅ Đăng ký, nộp giấy phép và theo dõi trạng thái xác minh; cần cấu hình Cloudinary để upload thực tế — `UC-AUTH-01`
+- ✅ Tạo/quản lý campaign, gửi duyệt, xem chi tiết và lịch sử; campaign phải qua Admin review — `UC-CAMP-01`
+- ✅ Quản lý media/cập nhật nội dung chiến dịch trong phạm vi được phép — `UC-CAMP-02`
+- ✅ Xem dashboard tất toán và báo cáo thật theo chiến dịch — `UC-CAMP-03, 04`
+- 🟡 In/lưu báo cáo có sẵn; gói ESG ZIP/niêm phong dữ liệu chưa hoàn thiện — `UC-CAMP-05`
+- ✅ Tạo hồ sơ giải ngân, upload chứng từ, đại diện pháp luật xác nhận, giải trình; Admin hậu kiểm và quyết định công khai — `UC-DISB-01…04`
+- ✅ Quản lý nhu cầu nguồn lực và xem đăng ký/matching; Admin duyệt nhu cầu, xác minh matching/bàn giao
 
 **Không được làm:** duyệt hồ sơ của tổ chức khác hoặc vào Admin Portal. MVP không có sub-role Maker/Checker hay chức năng mời thành viên tổ chức.
 
@@ -3992,10 +3978,10 @@ Hai sub-role này đã bị loại khỏi mô hình triển khai. Chữ ký/appr
 
 ## 7. NGƯỜI BÁO SOS (SOS Reporter — hành vi ẩn danh, không phải role cố định)
 
-Phạm vi: bất kỳ ai (kể cả Khách vãng lai) sau khi xác minh SĐT qua OTP tại chỗ — không cần tài khoản lâu dài.
+Phạm vi: bất kỳ ai, kể cả Khách vãng lai, có thể gửi báo cáo mà không cần tài khoản lâu dài; số điện thoại là thông tin liên hệ, hiện không có xác minh OTP.
 
-- 🟢 Xem bản đồ SOS — `UC-SOS-01`
-- 🟢/🟡 Phát tín hiệu SOS: xác minh OTP → lấy GPS → chụp ảnh EXIF → mô tả nhu cầu → gửi → AI chấm trust score — `UC-SOS-03`
+- ✅ Xem bản đồ SOS — `UC-SOS-01`
+- 🟡 Gửi SOS ẩn danh không cần đăng nhập, kèm ảnh/GPS/điện thoại; yêu cầu chiến dịch khẩn cấp có thể gửi cùng báo cáo để Admin xét duyệt — `UC-SOS-03, 09`; chưa có OTP và trust-scoring AI đã xác thực
 
 **Không được làm:** xem ai đã nhận cảnh báo về báo cáo của mình, chỉnh sửa báo cáo sau khi gửi (chưa có UI).
 
@@ -4003,11 +3989,9 @@ Phạm vi: bất kỳ ai (kể cả Khách vãng lai) sau khi xác minh SĐT qua
 
 ## 8. ĐỘI CỨU TRỢ / TÌNH NGUYỆN VIÊN (Rescue Team — role `rescue_team`)
 
-- 🟢/🔴 Gửi hồ sơ hoạt động cứu trợ để Admin xét duyệt — `UC-AUTH-04, UC-SOS-05`
-- 🔴 Chỉ sử dụng tài khoản nội bộ sau khi Admin duyệt và kích hoạt role `rescue_team` — `UC-AUTH-05`
-- 🟢 Xem chi tiết điểm SOS trên bản đồ — `UC-SOS-02`
-- 🔴 Nhận cảnh báo real-time khi có SOS trong bán kính đã đăng ký (cần WebSocket — chưa có trong demo) — `UC-SOS-06`
-- 🔴 Cập nhật trạng thái đội (sẵn sàng / đang đi / bận) — `UC-SOS-07`
+- ✅ Nộp hồ sơ hoặc được Admin mời qua email; kích hoạt bằng token riêng và đặt mật khẩu — `UC-AUTH-04, 05; UC-SOS-05`
+- ✅ Xem nhiệm vụ SOS được phân công, xác nhận nhận việc, cập nhật trạng thái/vị trí/tiến độ — `UC-SOS-02, 06, 07`
+- 🟡 Database tạo cảnh báo theo bán kính và phát Realtime; cần nghiệm thu kết nối realtime/reconnect/thông báo thiết bị — `UC-SOS-06`
 
 **Không được làm:** duyệt/xử lý SOS report của người khác, alert đội khác thay Admin.
 
@@ -4017,11 +4001,11 @@ Phạm vi: bất kỳ ai (kể cả Khách vãng lai) sau khi xác minh SĐT qua
 
 Phạm vi: vận hành toàn nền tảng, không thuộc về bất kỳ tổ chức cụ thể nào.
 
-- 🟢 Xem Dashboard tổng quan hệ thống (hoạt động toàn nền tảng) — `UC-ADMIN-01`
-- 🟢/🔴 Duyệt / Từ chối chiến dịch mới đăng ký — `UC-ADMIN-02`
-- 🟢/🔴 Xác minh / Từ chối / Yêu cầu bổ sung giấy phép hoạt động tổ chức — `UC-ADMIN-03`
-- 🟢 Hậu kiểm giải ngân, mở chứng từ, yêu cầu giải trình và công khai khoản chi hợp lệ — `UC-ADMIN-04`
-- 🟢/🔴 Quản lý SOS Reports, điều phối lực lượng và duyệt hồ sơ cứu trợ — `UC-ADMIN-05, UC-SOS-08, 09`
+- ✅ Dashboard Admin, kiểm duyệt campaign/KYC cá nhân-tổ chức và quản lý tài khoản rescue — `UC-ADMIN-01…03`
+- ✅ Đối soát giao dịch thủ công, quản lý ví, biên nhận, hậu kiểm giải ngân — `UC-ADMIN-04`
+- ✅ Duyệt nhu cầu nguồn lực, kiểm tra matching và xác nhận bàn giao
+- ✅ Duyệt SOS, điều phối đội/TNV/xe, quản lý tiến độ và tạo campaign khẩn cấp gắn với tổ chức đã duyệt — `UC-ADMIN-05; UC-SOS-08, 09`
+- ✅ CRUD bài viết/tài nguyên media trong Admin — chức năng quản trị nội dung
 
 **Chưa rõ / cần chốt chính sách:** có được vừa duyệt KYC vừa duyệt giải ngân cho cùng 1 tổ chức không (câu hỏi đã nêu ở tài liệu xác nhận Admin, mục 2.3); có phân cấp nhiều mức Admin không.
 
@@ -4031,11 +4015,11 @@ Phạm vi: vận hành toàn nền tảng, không thuộc về bất kỳ tổ c
 
 | Actor phụ | Chức năng | Được gọi trong luồng của |
 |---|---|---|
-| Ngân hàng / VietQR Gateway | Sinh mã QR động, gửi Webhook biến động số dư | `UC-DON-01, 05`, `UC-SYS-01, 02` |
-| Cổng SMS OTP (Twilio/VNPT) | Gửi & xác minh mã OTP | `UC-AUTH-06`, `UC-SOS-03` |
-| API Tổng cục Thuế | Xác minh mã hóa đơn VAT thật/giả | `UC-DISB-05`, `UC-SYS-06` |
-| AI Trust-scoring | Chấm điểm 0–100 cho báo cáo SOS | `UC-SOS-03` |
-| Cron Scheduler (Vercel Cron) | Sinh & lưu SHA-256 hash tài chính mỗi 23:59 | `UC-SYS-05` |
+| Ngân hàng / VietQR Gateway | Tạo QR; hiện chưa có webhook ngân hàng trong `src/app/api` nên xác nhận tiền vẫn thủ công | `UC-DON-01, 05`, `UC-SYS-01, 02` |
+| Google OAuth | Đăng nhập OAuth; cần bật provider/redirect URL tại Supabase | `UC-AUTH-03` |
+| Resend | Email lời mời, thông báo và biên nhận; cần API key/domain/from hợp lệ | Email nghiệp vụ |
+| Cloudinary | Lưu ảnh/media/chứng từ theo luồng ứng dụng; cần credentials production | Campaign/SOS/news/disbursement |
+| Supabase Realtime | Phát sự kiện cảnh báo SOS; cần kiểm tra subscriber, retry và tải vận hành | `UC-SOS-06` |
 
 ---
 
@@ -4044,7 +4028,9 @@ Phạm vi: vận hành toàn nền tảng, không thuộc về bất kỳ tổ c
 1. **Donor và Corporate hiện dùng chung khả năng** ở phần đóng góp phi tiền tệ (`UC-RES-01…03`) — khi tách bảng permission, có thể gộp chung 1 nhóm quyền "Contributor" cho cả 2, chỉ khác nhau ở các trường dữ liệu bổ sung (MST, tên pháp nhân) chứ không khác về hành động được phép làm.
 2. **Không tạo permission Maker/Checker trong MVP.** API giải ngân kiểm tra tài khoản `org` có phải người đại diện pháp luật của đúng tổ chức hay không và lưu bằng chứng approval.
 3. **Admin là bên hậu kiểm, không phải Checker.** Mọi thao tác hậu kiểm phải có audit log và không được ghi đè chữ ký/approval của người đại diện.
-4. **Trung tâm thông báo (`UC-NOTI-*`) nằm trong phạm vi Donor nhưng hiện không có lối vào UI nào** — cần bổ sung icon chuông trên header trước khi tính năng này có ý nghĩa thực tế.
+4. **Không đánh đồng code với tích hợp ngoài:** Google OAuth, email, Cloudinary, Realtime và ngân hàng cần secrets/provider/callback đã cấu hình và kiểm thử trên môi trường đích.
+5. **Trung tâm thông báo in-app (`UC-NOTI-*`) chưa có trải nghiệm đầy đủ**; email thông báo hiện có không đồng nghĩa đã có hộp thư thông báo trong ứng dụng.
+6. **Webhook ngân hàng còn thiếu:** migration có bảng sự kiện webhook, nhưng chưa có API route nhận và xác minh sự kiện ngân hàng; không đánh dấu UC thanh toán tự động là hoàn tất.
 
 ---
 

@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireActionRole } from "@/lib/auth/server";
 import { slugify } from "@/lib/utils/slugify";
 import type { NewsPostStatus } from "@/lib/news/types";
@@ -68,6 +68,7 @@ function validatePayload(formData: FormData) {
 }
 
 function refreshNews() {
+  revalidateTag("public-news");
   revalidatePath("/news");
   revalidatePath("/admin");
 }

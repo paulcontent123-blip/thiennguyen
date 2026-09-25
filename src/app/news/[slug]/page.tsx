@@ -3,43 +3,26 @@ import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
 import { SiteHeader } from "@/components/site-header";
-import { createClient } from "@/lib/supabase/server";
+import { getPublicNews, getPublicNewsPost } from "@/lib/public-data";
 import type { NewsPost } from "@/lib/news/types";
 import { shouldBypassImageOptimization } from "@/lib/images";
 import { extractNewsHeadings, sanitizeNewsHtml } from "@/lib/news/content";
 
-const NEWS_SELECT = "id, slug, title, excerpt, content, category, tags, cover_url, status, author_id, published_at, created_at, updated_at, meta_title, meta_description, focus_keyword, canonical_url";
-
-async function loadPost(slug: string): Promise<NewsPost | null> {
-  const { data, error } = await createClient()
-    .from("news_posts")
-    .select(NEWS_SELECT)
-    .eq("slug", slug)
-    .eq("status", "published")
-    .not("published_at", "is", null)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data as NewsPost;
+async function loadPost(slug: string) {
+  return getPublicNewsPost(slug);
 }
 
 async function loadRelatedPosts(post: NewsPost) {
-  const { data } = await createClient()
-    .from("news_posts")
-    .select("id, slug, title, excerpt, category, tags, cover_url, published_at")
-    .eq("status", "published")
-    .not("published_at", "is", null)
-    .neq("id", post.id)
-    .order("published_at", { ascending: false })
-    .limit(24);
+  const { posts } = await getPublicNews();
   const tags = new Set(post.tags.map((tag) => tag.toLowerCase()));
-  return (data ?? []).map((item) => ({
+  return posts.filter((item) => item.id !== post.id).slice(0, 24).map((item) => ({
     ...item,
     score: (item.category === post.category ? 2 : 0) + (item.tags ?? []).filter((tag: string) => tags.has(tag.toLowerCase())).length,
   })).sort((a, b) => b.score - a.score || new Date(b.published_at ?? 0).getTime() - new Date(a.published_at ?? 0).getTime()).slice(0, 4);
 }
 
 export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
-  const post = await loadPost(params.slug);
+  const { post } = await loadPost(params.slug);
   if (!post) return { title: "Tin tức | Thiện Nguyện" };
   return {
     title: post.meta_title || `${post.title} | Thiện Nguyện`,
@@ -50,8 +33,21 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default async function NewsDetailPage({ params }: { params: { slug: string } }) {
-  const post = await loadPost(params.slug);
-  if (!post) notFound();
+  const postResult = await loadPost(params.slug);
+  const post = postResult.post;
+  if (!post && !postResult.error) notFound();
+  if (!post) {
+    return (
+      <main className="min-h-screen bg-paper">
+        <SiteHeader />
+        <section className="mx-auto max-w-3xl px-6 py-20 text-center">
+          <h1 className="font-serif text-3xl font-semibold text-chamDeep">Bài viết tạm thời chưa tải được</h1>
+          <p className="mt-3 text-inkMid">Máy chủ dữ liệu đang gặp sự cố. Vui lòng thử lại sau ít phút.</p>
+          <Link href="/news" className="button-primary mt-6 inline-flex">Quay lại tin tức</Link>
+        </section>
+      </main>
+    );
+  }
   const safeHtml = sanitizeNewsHtml(post.content);
   const headings = extractNewsHeadings(safeHtml);
   const relatedPosts = await loadRelatedPosts(post);

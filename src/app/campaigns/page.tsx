@@ -1,27 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CampaignCard, type CampaignCardData } from "@/components/campaign-card";
+import { CampaignCard } from "@/components/campaign-card";
 import { SiteHeader } from "@/components/site-header";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
 import { getCampaignFollowStates, type CampaignFollowState } from "@/lib/campaigns/follows";
 import { PROVINCES } from "@/lib/geo/provinces";
+import { getPublicCampaigns, type PublicCampaign } from "@/lib/public-data";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 const PAGE_SIZE = 9;
-const PUBLIC_STATUSES = ["approved", "active", "closed"] as const;
-
 type SearchParams = Record<string, string | string[] | undefined>;
-
-type PublicCampaign = CampaignCardData & {
-  id: string;
-  campaignType: string;
-  category: string | null;
-  province: string | null;
-  status: string;
-  ownerType: string;
-  publishedAt: string | null;
-};
 
 function firstParam(value: string | string[] | undefined) {
   return Array.isArray(value) ? value[0] : value;
@@ -51,91 +40,35 @@ function buildPageHref(searchParams: SearchParams, page: number) {
   return queryString ? `/campaigns?${queryString}` : "/campaigns";
 }
 
-async function getPublicCampaigns(searchParams: SearchParams, page: number) {
-  if (!hasSupabaseEnv()) {
-    return { campaigns: [] as PublicCampaign[], total: 0 };
-  }
-
-  const supabase = createClient();
-  const query = firstParam(searchParams.q)?.replace(/[%,]/g, "").trim().slice(0, 80);
-  const category = firstParam(searchParams.category);
-  const province = firstParam(searchParams.province);
-  const type = firstParam(searchParams.type);
-  const owner = firstParam(searchParams.owner);
-  const from = (page - 1) * PAGE_SIZE;
-
-  let campaignsQuery = supabase
-    .from("campaigns")
-    .select(
-      "id, organization_id, owner_type, slug, title, summary, target_amount, campaign_type, category, province, status, published_at, created_at",
-      { count: "exact" },
-    )
-    .in("status", [...PUBLIC_STATUSES])
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .order("created_at", { ascending: false })
-    .range(from, from + PAGE_SIZE - 1);
-
-  if (query) campaignsQuery = campaignsQuery.ilike("title", `%${query}%`);
-  if (category && CAMPAIGN_CATEGORIES.includes(category as (typeof CAMPAIGN_CATEGORIES)[number])) {
-    campaignsQuery = campaignsQuery.eq("category", category);
-  }
-  if (province && PROVINCES.includes(province as (typeof PROVINCES)[number])) {
-    campaignsQuery = campaignsQuery.eq("province", province);
-  }
-  if (type === "direct" || type === "partner") {
-    campaignsQuery = campaignsQuery.eq("campaign_type", type);
-  }
-  if (owner === "organization" || owner === "individual") {
-    campaignsQuery = campaignsQuery.eq("owner_type", owner);
-  }
-
-  const { data, count, error } = await campaignsQuery;
-  if (error) throw new Error(error.message);
-
-  const rows = data ?? [];
-  const organizationIds = Array.from(new Set(rows.map((campaign) => campaign.organization_id).filter(Boolean)));
-  const { data: organizations, error: organizationError } = organizationIds.length
-    ? await supabase.from("organizations").select("id, name").in("id", organizationIds)
-    : { data: [], error: null };
-
-  if (organizationError) throw new Error(organizationError.message);
-
-  const organizationNames = new Map((organizations ?? []).map((organization) => [organization.id, organization.name]));
-  const campaigns = rows.map((campaign) => ({
-    id: campaign.id,
-    slug: campaign.slug,
-    title: campaign.title,
-    summary: campaign.summary,
-    targetAmount: Number(campaign.target_amount),
-    organizationName: campaign.owner_type === "individual" ? undefined : organizationNames.get(campaign.organization_id) ?? "Tổ chức thiện nguyện",
-    ownerType: campaign.owner_type,
-    campaignType: campaign.campaign_type,
-    category: campaign.category,
-    province: campaign.province,
-    status: campaign.status,
-    publishedAt: campaign.published_at,
-  }));
-
-  return { campaigns, total: count ?? 0 };
-}
-
 export default async function CampaignsPage({ searchParams = {} }: { searchParams?: SearchParams }) {
   const requestedPage = getPage(firstParam(searchParams.page));
-  const { campaigns, total } = await getPublicCampaigns(searchParams, requestedPage);
+  const campaignResult = await getPublicCampaigns({
+    query: firstParam(searchParams.q) ?? "",
+    category: firstParam(searchParams.category) ?? "",
+    province: firstParam(searchParams.province) ?? "",
+    type: firstParam(searchParams.type) ?? "",
+    owner: firstParam(searchParams.owner) ?? "",
+    page: requestedPage,
+  });
+  const { campaigns, total, stale, error: dataError } = campaignResult;
   let viewer: "guest" | "donor" | "other" = "guest";
   let followStates: Record<string, CampaignFollowState> = {};
   if (hasSupabaseEnv()) {
-    const supabase = createClient();
-    const { data: authData } = await supabase.auth.getUser();
-    const { data: profile } = authData.user
-      ? await supabase.from("profiles").select("role").eq("id", authData.user.id).maybeSingle()
-      : { data: null };
-    viewer = !authData.user ? "guest" : profile?.role === "donor" ? "donor" : "other";
-    followStates = await getCampaignFollowStates(
-      supabase,
-      campaigns.map((campaign) => campaign.id),
-      viewer === "donor" ? authData.user?.id : undefined,
-    );
+    try {
+      const supabase = createClient();
+      const { data: authData } = await supabase.auth.getUser();
+      const { data: profile } = authData.user
+        ? await supabase.from("profiles").select("role").eq("id", authData.user.id).maybeSingle()
+        : { data: null };
+      viewer = !authData.user ? "guest" : profile?.role === "donor" ? "donor" : "other";
+      followStates = await getCampaignFollowStates(
+        supabase,
+        campaigns.map((campaign) => campaign.id),
+        viewer === "donor" ? authData.user?.id : undefined,
+      );
+    } catch (authError) {
+      console.warn("Campaign viewer data unavailable", authError);
+    }
   }
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -163,6 +96,12 @@ export default async function CampaignsPage({ searchParams = {} }: { searchParam
           </div>
           <span className="rounded-full bg-luaSoft px-3 py-1.5 text-sm font-bold text-lua">{total} chiến dịch</span>
         </div>
+
+        {dataError ? (
+          <div role="status" className="mt-5 rounded-[10px] border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            {stale ? "Đang dùng dữ liệu dự phòng. " : ""}{dataError}
+          </div>
+        ) : null}
 
         <form className="mt-8 grid gap-3 rounded-[14px] border border-line bg-white p-4 md:grid-cols-[minmax(0,1fr)_170px_170px_150px_150px_auto]">
           <label className="sr-only" htmlFor="campaign-search">Tìm kiếm chiến dịch</label>

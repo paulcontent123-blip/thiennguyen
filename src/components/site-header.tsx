@@ -25,13 +25,17 @@ export async function SiteHeader() {
     : undefined;
   let canCreateCampaign = false;
   if (role === "org" && user) {
-    const supabase = createClient();
-    const { data: organization } = await supabase
-      .from("organizations")
-      .select("license_status")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    canCreateCampaign = organization?.license_status === "approved";
+    try {
+      const supabase = createClient();
+      const { data: organization } = await supabase
+        .from("organizations")
+        .select("license_status")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      canCreateCampaign = organization?.license_status === "approved";
+    } catch (error) {
+      console.warn("Organization header status unavailable", error);
+    }
   }
   const roleLinks = [
     ...(role && role !== "admin" ? [["Tin tức", "/news"]] : []),

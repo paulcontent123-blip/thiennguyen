@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireActionRole } from "@/lib/auth/server";
 import { PROVINCES } from "@/lib/geo/provinces";
 import { RESCUE_RESOURCE_TYPES } from "@/lib/rescue/resource-types";
@@ -307,6 +307,7 @@ export async function approveCampaign(id: string) {
   assertMutationSucceeded(error, "Không thể duyệt chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
   await notifyCampaignOwner(supabase, data, "approved", "Đã duyệt");
+  revalidateTag("public-campaigns");
   revalidatePath("/admin");
   revalidatePath("/organization");
 }
@@ -325,6 +326,7 @@ export async function requestCampaignRevision(id: string, formData: FormData) {
   assertMutationSucceeded(error, "Không thể yêu cầu bổ sung chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
   await notifyCampaignOwner(supabase, data, "needs_revision", "Cần chỉnh sửa", note);
+  revalidateTag("public-campaigns");
   revalidatePath("/admin");
   revalidatePath("/organization");
 }
@@ -343,6 +345,7 @@ export async function rejectCampaign(id: string, formData: FormData) {
   assertMutationSucceeded(error, "Không thể từ chối chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
   await notifyCampaignOwner(supabase, data, "rejected", "Từ chối", note);
+  revalidateTag("public-campaigns");
   revalidatePath("/admin");
   revalidatePath("/organization");
 }
@@ -359,6 +362,7 @@ export async function activateCampaign(id: string) {
   assertMutationSucceeded(error, "Không thể kích hoạt chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái đã duyệt.");
   await notifyCampaignOwner(supabase, data, "active", "Đang hoạt động");
+  revalidateTag("public-campaigns");
   revalidatePath("/admin");
   revalidatePath("/organization");
   revalidatePath("/");
@@ -376,6 +380,7 @@ export async function closeCampaign(id: string) {
   assertMutationSucceeded(error, "Không thể đóng chiến dịch.");
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái hoạt động.");
   await notifyCampaignOwner(supabase, data, "closed", "Đã đóng");
+  revalidateTag("public-campaigns");
   revalidatePath("/admin");
   revalidatePath("/organization");
   revalidatePath(`/campaign-closure/${id}`);

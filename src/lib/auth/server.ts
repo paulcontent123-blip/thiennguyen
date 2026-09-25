@@ -26,8 +26,16 @@ async function readAuthenticatedUser() {
 
 export async function getCurrentAuth(): Promise<{ user: User | null; role: AppRole | null; fullName: string | null }> {
   if (!hasSupabaseEnv()) return { user: null, role: null, fullName: null };
-  const { user, role, fullName } = await readAuthenticatedUser();
-  return { user, role, fullName };
+  try {
+    const { user, role, fullName } = await readAuthenticatedUser();
+    return { user, role, fullName };
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "digest" in error && error.digest === "DYNAMIC_SERVER_USAGE") {
+      throw error;
+    }
+    console.warn("Session lookup unavailable; rendering as guest", error);
+    return { user: null, role: null, fullName: null };
+  }
 }
 
 export async function requirePageRole(allowedRoles: readonly AppRole[], pathname: string) {

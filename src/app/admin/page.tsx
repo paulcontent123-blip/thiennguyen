@@ -2,13 +2,14 @@ import { AdminPortal } from "@/components/admin/admin-portal";
 import type { AdminResourceClaim, AdminResourceNeed, AdminResourceOffer } from "@/components/admin/admin-resource-workflow";
 import { isAdminPanelKey } from "@/lib/admin/panels";
 import { requirePageRole } from "@/lib/auth/server";
+import type { NewsMediaAsset, NewsPost } from "@/lib/news/types";
 
 export default async function AdminPage({ searchParams = {} }: { searchParams?: { panel?: string | string[] } }) {
   const requestedPanel = Array.isArray(searchParams.panel) ? searchParams.panel[0] : searchParams.panel;
   const initialPanel = isAdminPanelKey(requestedPanel) ? requestedPanel : undefined;
   const { supabase } = await requirePageRole(["admin"], "/admin");
 
-  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes, resourceNeedsRes, resourceOffersRes, resourceClaimsRes, walletTopupsRes, walletAllocationsRes] = await Promise.all([
+  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes, resourceNeedsRes, resourceOffersRes, resourceClaimsRes, walletTopupsRes, walletAllocationsRes, newsPostsRes, newsMediaRes] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id, title, owner_type, owner_user_id, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
@@ -89,6 +90,15 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       .select("id, user_id, amount_vnd, status, reversal_reason, created_at, profiles!wallet_allocations_user_id_fkey(full_name), campaigns(title), transactions!wallet_allocations_transaction_id_fkey(tx_ref)")
       .order("created_at", { ascending: false })
       .limit(200),
+    supabase
+      .from("news_posts")
+      .select("id, slug, title, excerpt, content, category, tags, cover_url, status, author_id, published_at, created_at, updated_at, meta_title, meta_description, focus_keyword, canonical_url")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("news_media")
+      .select("id, url, public_id, original_name, alt_text, width, height, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100),
   ]);
 
   const relation = <T,>(value: T | T[] | null | undefined): T | null => Array.isArray(value) ? value[0] ?? null : value ?? null;
@@ -151,6 +161,9 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       resourceOffers={resourceOffers}
       resourceClaims={resourceClaims}
       resourceLoadError={resourceLoadError}
+      newsPosts={newsPostsRes.data ?? []}
+      newsMedia={(newsMediaRes.data ?? []) as NewsMediaAsset[]}
+      newsEditorLoadError={newsPostsRes.error || newsMediaRes.error ? "Chưa đọc được thư viện tin tức. Hãy áp dụng migration 202609250005_news_editor_media_seo.sql." : null}
     />
   );
 }

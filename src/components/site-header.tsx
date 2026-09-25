@@ -7,6 +7,7 @@ import { getCurrentAuth } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
 
 const navLinks = [
+  ["Tin tức", "/news"],
   ["Ủng hộ", "/"],
   ["Khám phá", "/campaigns"],
   ["Bản đồ SOS", "/sos"],
@@ -33,6 +34,7 @@ export async function SiteHeader() {
     canCreateCampaign = organization?.license_status === "approved";
   }
   const roleLinks = [
+    ...(role && role !== "admin" ? [["Tin tức", "/news"]] : []),
     ...(role === "org" ? [["Quản lý tổ chức", "/organization"]] : []),
     ...(role === "donor" || role === "org" ? [["Ví của tôi", "/wallet"]] : []),
     ...(role === "donor" ? [["Chiến dịch cá nhân", "/personal-campaigns"]] : []),

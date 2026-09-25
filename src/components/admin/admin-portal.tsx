@@ -33,7 +33,9 @@ import { budgetLabel, interestLabel } from "@/lib/corporate/options";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminWalletPanel, type AdminWalletAllocation, type AdminWalletTopup } from "@/components/admin/admin-wallet-panel";
 import { AdminResourceWorkflow,type AdminResourceClaim, type AdminResourceNeed, type AdminResourceOffer } from "@/components/admin/admin-resource-workflow";
+import { AdminNewsPanel } from "@/components/admin/admin-news-panel";
 import type { AdminPanelKey } from "@/lib/admin/panels";
+import type { NewsMediaAsset, NewsPost } from "@/lib/news/types";
 import { shouldBypassImageOptimization } from "@/lib/images";
 import { RescueAccountForm } from "@/components/admin/rescue-account-form";
 import { PROVINCES } from "@/lib/geo/provinces";
@@ -451,7 +453,7 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
   );
 }
 
-export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, walletTopups = [], walletAllocations = [], initialPanel, sosAwaitingClosure = 0 }: { walletTopups?: AdminWalletTopup[]; walletAllocations?: AdminWalletAllocation[]; initialPanel?: Panel; sosAwaitingClosure?: number; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
+export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, newsPosts, newsMedia, newsEditorLoadError, walletTopups = [], walletAllocations = [], initialPanel, sosAwaitingClosure = 0 }: { walletTopups?: AdminWalletTopup[]; walletAllocations?: AdminWalletAllocation[]; initialPanel?: Panel; sosAwaitingClosure?: number; newsPosts: NewsPost[]; newsMedia: NewsMediaAsset[]; newsEditorLoadError: string | null; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>(initialPanel ?? "overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
@@ -639,6 +641,8 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
         {panel === "wallet" ? <AdminWalletPanel topups={walletTopups} allocations={walletAllocations} /> : null}
 
         {panel === "resources" ?<AdminResourceWorkflow needs={resourceNeeds} offers={resourceOffers} claims={resourceClaims} loadError={resourceLoadError} /> : null}
+
+        {panel === "news" ? <AdminNewsPanel posts={newsPosts} media={newsMedia} loadError={newsEditorLoadError} /> : null}
 
         {panel === "sos" ? <section>
           <div className="mb-4 rounded-[8px] border border-line bg-white p-4">

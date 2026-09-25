@@ -9,6 +9,7 @@ import { MobileDonateBar } from "@/components/campaigns/mobile-donate-bar";
 import { SiteHeader } from "@/components/site-header";
 import { type CampaignMedia, type CampaignSeo, type CampaignShareSettings, type CampaignUpdate } from "@/lib/campaigns/content";
 import { getCampaignFollowStates } from "@/lib/campaigns/follows";
+import { shouldBypassImageOptimization } from "@/lib/images";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
@@ -164,7 +165,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
 
         <div className="grid items-start gap-7 lg:grid-cols-[minmax(0,1fr)_330px]">
           <div>
-            {cover ? <div className="mb-5 overflow-hidden rounded-[14px] border border-line bg-paperDeep"><img src={cover.url} alt={cover.alt_text || campaign.title} className="max-h-[420px] w-full object-cover" /></div> : null}
+            {cover ? <div className="mb-5 overflow-hidden rounded-[14px] border border-line bg-paperDeep"><Image src={cover.url} alt={cover.alt_text || campaign.title} width={1400} height={788} sizes="(max-width: 1024px) 100vw, 780px" unoptimized={shouldBypassImageOptimization(cover.url)} className="max-h-[420px] w-full object-cover" /></div> : null}
             <section>
               <div id="organization" className="mb-3 flex items-center gap-2.5">
                 <div className="relative flex h-[34px] w-[34px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-sonSoft text-base">

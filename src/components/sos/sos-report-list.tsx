@@ -1,4 +1,6 @@
+import Image from "next/image";
 import { TEAM_PROGRESS, type SosTeamResponse } from "@/lib/sos/team-progress";
+import { shouldBypassImageOptimization } from "@/lib/images";
 
 type SosReport = {
   id: string;
@@ -35,8 +37,9 @@ export function SosReportList({ reports }: { reports: SosReport[] }) {
             return (
               <div key={report.id} className="overflow-hidden rounded-[14px] border border-line bg-white">
                 {report.photo_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={report.photo_url} alt="" className="h-32 w-full object-cover" />
+                  <div className="relative h-32 w-full">
+                    <Image src={report.photo_url} alt={`Ảnh SOS tại ${report.location_text}`} fill sizes="(max-width: 640px) 100vw, 50vw" unoptimized={shouldBypassImageOptimization(report.photo_url)} className="object-cover" />
+                  </div>
                 ) : null}
                 <div className="p-4">
                   <span className={`rounded-[4px] px-2 py-0.5 text-xs font-bold ${status.className}`}>{status.label}</span>

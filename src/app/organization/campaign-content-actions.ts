@@ -281,7 +281,7 @@ export async function generateCampaignPoster(campaignId: string): Promise<Campai
 }
 
 async function findCampaignFromContentRow(table: "campaign_media" | "campaign_updates", id: string) {
-  const { supabase } = await requireActionRole(["org", "admin"]);
+  const { supabase } = await requireActionRole(["donor", "org", "admin"]);
   const { data: row, error } = await supabase.from(table).select("campaign_id").eq("id", id).maybeSingle();
   if (error || !row) throw new Error("Không tìm thấy nội dung chiến dịch.");
   const managed = await requireCampaignManager(row.campaign_id);

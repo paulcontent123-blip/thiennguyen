@@ -1,7 +1,9 @@
 "use client";
 
+import Image from "next/image";
 import { useState } from "react";
 import type { CampaignMedia, CampaignShareSettings, CampaignUpdate } from "@/lib/campaigns/content";
+import { shouldBypassImageOptimization } from "@/lib/images";
 
 type CampaignDetailTabsProps = {
   title: string;
@@ -114,7 +116,7 @@ function VideoPanel({ videos }: { videos: CampaignMedia[] }) {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {videos.map((video) => (
             <a key={video.id} href={video.url} target="_blank" rel="noreferrer" className="relative flex aspect-[9/16] flex-col items-center justify-center gap-2 overflow-hidden rounded-[10px] bg-[#10232a] p-4 text-center text-white hover:opacity-90">
-              {video.thumbnail_url ? <img src={video.thumbnail_url} alt={video.alt_text || video.title} className="absolute inset-0 h-full w-full object-cover opacity-60" /> : null}
+              {video.thumbnail_url ? <Image src={video.thumbnail_url} alt={video.alt_text || video.title} fill sizes="(max-width: 640px) 100vw, 33vw" unoptimized={shouldBypassImageOptimization(video.thumbnail_url)} className="object-cover opacity-60" /> : null}
               <div className="relative z-10 text-4xl opacity-80">▶</div>
               <div className="relative z-10 text-xs font-semibold">{video.title || defaultLabels[video.slot ?? ""] || "Video cập nhật"}</div>
               <div className="relative z-10 text-[11px] text-white/75">Mở video ↗</div>
@@ -137,7 +139,7 @@ function ViralPanel({ title, poster, qrUrl }: { title: string; poster: CampaignM
         <p className="mt-1.5 text-[13.5px] leading-6 text-white/75">Poster 9:16 lấy từ nội dung chiến dịch; VietQR được sinh theo giao dịch và tài khoản trung tâm do Admin VEA quản lý.</p>
         <div className="mt-4 flex items-center gap-3 rounded-[10px] bg-white/10 p-3">
           <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-[6px] bg-paper text-3xl">
-            {poster ? <img src={poster.url} alt={poster.alt_text || title} className="h-full w-full object-cover" /> : "📷"}
+            {poster ? <Image src={poster.url} alt={poster.alt_text || title} width={64} height={64} unoptimized={shouldBypassImageOptimization(poster.url)} className="h-full w-full object-cover" /> : "📷"}
           </div>
           <div>
             <div className="text-sm font-bold">Poster: {title}</div>
@@ -145,7 +147,7 @@ function ViralPanel({ title, poster, qrUrl }: { title: string; poster: CampaignM
           </div>
         </div>
         {poster ? <a href={poster.url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-sm font-bold text-son">⇩ Tải Poster 9:16</a> : <span className="mt-3 inline-flex rounded-full bg-white/70 px-4 py-2 text-sm font-bold text-son">⇩ Tải Poster 9:16 · Chưa có</span>}
-        {qrUrl ? <div className="mt-4 flex items-center gap-3 rounded-[10px] bg-white p-3 text-chamDeep"><img src={qrUrl} alt="VietQR của chiến dịch" className="h-28 w-28 rounded bg-white object-contain" /><div><div className="text-sm font-bold">VietQR động</div><div className="mt-1 text-xs text-inkSoft">QR được sinh theo tài khoản trung tâm và mã giao dịch riêng.</div></div></div> : null}
+        {qrUrl ? <div className="mt-4 flex items-center gap-3 rounded-[10px] bg-white p-3 text-chamDeep"><Image src={qrUrl} alt="VietQR của chiến dịch" width={112} height={112} unoptimized={shouldBypassImageOptimization(qrUrl)} className="h-28 w-28 rounded bg-white object-contain" /><div><div className="text-sm font-bold">VietQR động</div><div className="mt-1 text-xs text-inkSoft">QR được sinh theo tài khoản trung tâm và mã giao dịch riêng.</div></div></div> : null}
       </div>
       <div className="mt-3 rounded-[8px] border border-dashed border-lineStrong bg-paper px-3 py-2.5 font-mono text-xs text-inkSoft">Schema.org LiveBlogPosting sẽ được render từ cấu hình SEO đã lưu.</div>
     </div>

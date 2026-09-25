@@ -8,7 +8,7 @@ const platformLinks = [
   ["Bản đồ SOS", "/sos"],
   ["Đóng góp nguồn lực", "/donate-items"],
   ["Báo cáo minh bạch", "/transparency"],
-  ["Dashboard đóng cổng", "/transparency"],
+  ["Dashboard đóng cổng", "/reports?tab=campaign"],
 ] as const;
 
 const organizationLinks = [

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { confirmWalletTopup, rejectWalletTopup, type WalletTopupReviewResult } from "@/app/admin/wallet-actions";
+import { confirmWalletTopup, rejectWalletTopup, reverseWalletAllocation, type WalletTopupReviewResult } from "@/app/admin/wallet-actions";
 
 export type AdminWalletTopup = {
   id: string;
@@ -19,6 +19,18 @@ export type AdminWalletTopup = {
   profiles: { full_name: string } | { full_name: string }[] | null;
 };
 
+export type AdminWalletAllocation = {
+  id: string;
+  user_id: string;
+  amount_vnd: number | string;
+  status: string;
+  reversal_reason: string | null;
+  created_at: string;
+  profiles: { full_name: string } | { full_name: string }[] | null;
+  campaigns: { title: string } | { title: string }[] | null;
+  transactions: { tx_ref: string } | { tx_ref: string }[] | null;
+};
+
 const money = new Intl.NumberFormat("vi-VN");
 const dateTime = new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" });
 const statusLabel: Record<string, string> = { pending: "Chờ đối soát", completed: "Đã cộng ví", rejected: "Không xác nhận" };
@@ -28,7 +40,7 @@ function ownerName(item: AdminWalletTopup) {
   return profile?.full_name || `Người dùng ${item.user_id.slice(0, 8)}`;
 }
 
-export function AdminWalletPanel({ topups }: { topups: AdminWalletTopup[] }) {
+export function AdminWalletPanel({ topups, allocations }: { topups: AdminWalletTopup[]; allocations: AdminWalletAllocation[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState<WalletTopupReviewResult | null>(null);
@@ -82,6 +94,17 @@ export function AdminWalletPanel({ topups }: { topups: AdminWalletTopup[] }) {
       <div className="mt-3 overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[640px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase text-inkMid"><tr><th className="px-3 py-2.5">Mã</th><th className="px-3 py-2.5">Người nạp</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Trạng thái</th></tr></thead><tbody>
         {processed.length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-inkSoft">Chưa có yêu cầu nào được xử lý.</td></tr> : processed.map((item) => <tr key={item.id} className="border-t border-line"><td className="px-3 py-2.5 font-mono text-xs">{item.tx_ref}</td><td className="px-3 py-2.5">{ownerName(item)}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{money.format(Number(item.amount_vnd))}đ</td><td className="px-3 py-2.5">{statusLabel[item.status] ?? item.status}{item.admin_note ? <div className="text-xs text-son">Lý do: {item.admin_note}</div> : null}</td></tr>)}
       </tbody></table></div>
+    </div>
+
+    <div>
+      <h2 className="font-serif text-lg font-semibold text-chamDeep">Phân bổ ví vào chiến dịch</h2>
+      <p className="mt-1 text-sm text-inkMid">Phân bổ hoàn tất được ghi đồng thời vào sổ cái và giao dịch. Chỉ hoàn tác khi giao dịch thực sự thất bại.</p>
+      <div className="mt-3 space-y-2">{allocations.length === 0 ? <p className="rounded-[8px] border border-line bg-white px-4 py-6 text-center text-sm text-inkSoft">Chưa có phân bổ ví.</p> : allocations.slice(0, 50).map((item) => {
+        const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
+        const campaign = Array.isArray(item.campaigns) ? item.campaigns[0] : item.campaigns;
+        const transaction = Array.isArray(item.transactions) ? item.transactions[0] : item.transactions;
+        return <article key={item.id} className="rounded-[8px] border border-line bg-white p-3"><div className="flex flex-wrap items-start justify-between gap-3"><div><strong className="text-chamDeep">{campaign?.title ?? "Chiến dịch"}</strong><div className="text-xs text-inkSoft">{profile?.full_name || item.user_id.slice(0, 8)} · {transaction?.tx_ref ?? "—"} · {dateTime.format(new Date(item.created_at))}</div></div><span className={`font-mono font-bold ${item.status === "completed" ? "text-son" : "text-lua"}`}>{money.format(Number(item.amount_vnd))}đ · {item.status === "completed" ? "Đã phân bổ" : "Đã hoàn tác"}</span></div>{item.reversal_reason ? <p className="mt-2 text-xs text-son">Lý do: {item.reversal_reason}</p> : null}{item.status === "completed" ? <form onSubmit={(event) => { event.preventDefault(); const data = new FormData(event.currentTarget); if (window.confirm("Hoàn số tiền này về ví và đánh dấu giao dịch đã hoàn tiền?")) run(() => reverseWalletAllocation(item.id, data)); }} className="mt-2 flex flex-wrap gap-2"><input name="reason" minLength={3} required placeholder="Lý do hoàn tác" className="w-56 rounded-[4px] border border-line px-2 py-1.5 text-xs outline-none focus:border-son" /><button disabled={pending} className="rounded-[4px] bg-son/10 px-3 py-1.5 text-xs font-bold text-son disabled:opacity-50">Hoàn tác phân bổ</button></form> : null}</article>;
+      })}</div>
     </div>
   </section>;
 }

@@ -19,6 +19,8 @@ type DonationRow = {
   receiving_account_no: string;
   receiving_account_name: string;
   received_amount: number | string | null;
+  receipt_pdf_hash: string | null;
+  receipt_email_status: string;
   campaigns: CampaignRelation | CampaignRelation[] | null;
 };
 
@@ -47,7 +49,7 @@ export default async function AccountPage() {
     supabase.from("profiles").select("phone").eq("id", user.id).maybeSingle(),
     supabase
       .from("transactions")
-      .select("id, tx_ref, amount_vnd, status, created_at, completed_at, donor_name, receipt_email, transfer_description, receiving_bank_id, receiving_account_no, receiving_account_name, received_amount, campaigns(title, slug, campaign_type, owner_type, organizations(name))")
+      .select("id, tx_ref, amount_vnd, status, created_at, completed_at, donor_name, receipt_email, transfer_description, receiving_bank_id, receiving_account_no, receiving_account_name, received_amount, receipt_pdf_hash, receipt_email_status, campaigns(title, slug, campaign_type, owner_type, organizations(name))")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50),
@@ -88,6 +90,8 @@ export default async function AccountPage() {
         accountName: row.receiving_account_name,
         transferDescription: row.transfer_description,
         receivedAmountVnd: Number(row.received_amount ?? row.amount_vnd) || 0,
+        pdfHash: row.receipt_pdf_hash,
+        emailStatus: row.receipt_email_status,
       } : null,
     }];
   });

@@ -76,16 +76,18 @@ export function DonationReceiptModal({ item, onClose }: { item: DonationHistoryI
               <dd className="font-mono text-lg font-bold text-son">{currency.format(receipt.receivedAmountVnd)}đ</dd>
             </div>
           </dl>
+          {receipt.pdfHash ? <div className="mt-3 border-t border-line pt-3 text-xs text-inkSoft"><div className="font-semibold text-chamDeep">SHA-256 của PDF</div><code className="mt-1 block break-all text-[10px]">{receipt.pdfHash}</code></div> : null}
           {receipt.receivedAmountVnd !== item.amountVnd ? (
             <p className="mt-2 text-xs text-inkSoft">Số tiền bạn đã khai báo khi tạo giao dịch: {currency.format(item.amountVnd)}đ.</p>
           ) : null}
         </div>
 
         <div className="receipt-hide-on-print mt-5 flex flex-wrap gap-2">
-          <button type="button" onClick={() => window.print()} className="button-primary !py-2.5 text-sm">🖨 In / Lưu PDF</button>
+          <a href={`/api/receipts/${item.id}`} className="button-primary !py-2.5 text-sm">↓ Tải PDF xác thực</a>
+          <button type="button" onClick={() => window.print()} className="button-secondary !py-2.5 text-sm">🖨 In</button>
           <button type="button" onClick={copyTxRef} className="button-secondary !py-2.5 text-sm">{copied ? "✓ Đã chép mã" : "⧉ Sao chép mã giao dịch"}</button>
         </div>
-        <p className="receipt-hide-on-print mt-3 text-xs leading-5 text-inkSoft">Dùng &ldquo;In / Lưu PDF&rdquo; rồi chọn &ldquo;Lưu dưới dạng PDF&rdquo; trong hộp thoại in của trình duyệt để lưu bản điện tử.</p>
+        <p className="receipt-hide-on-print mt-3 text-xs leading-5 text-inkSoft">{receipt.emailStatus === "sent" ? "Biên nhận PDF có mã SHA-256 ở trên đã được gửi qua email." : "Email biên nhận đang chờ hệ thống gửi lại. Bạn vẫn có thể in bản hiển thị này."}</p>
       </div>
     </div>,
     document.body,

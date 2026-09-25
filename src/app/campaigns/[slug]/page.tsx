@@ -64,6 +64,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
     { data: donationAvailable, error: donationAvailabilityError },
     { data: seo, error: seoError },
     { data: shareSettings, error: shareError },
+    { data: publicDisbursements, error: disbursementError },
   ] = await Promise.all([
     supabase
       .from("campaign_media")
@@ -91,6 +92,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
       .eq("campaign_id", campaign.id)
       .eq("is_public", true)
       .maybeSingle(),
+    supabase.rpc("get_public_campaign_cashflow", { p_campaign_id: campaign.id }),
   ]);
 
   if (mediaError) throw new Error(mediaError.message);
@@ -98,6 +100,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   if (donationAvailabilityError) console.warn("Central receiving account availability is unavailable", donationAvailabilityError.code);
   if (seoError) throw new Error(seoError.message);
   if (shareError) throw new Error(shareError.message);
+  if (disbursementError) console.warn("Public disbursements are unavailable", { campaignId: campaign.id, code: disbursementError.code });
 
   const [authResult, summaryResult] = await Promise.all([
     supabase.auth.getUser(),
@@ -218,6 +221,13 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
               campaignType={campaign.campaign_type}
               executionAmount={executionAmount}
               operationAmount={operationAmount}
+              disbursements={(publicDisbursements ?? []).map((item: { id: string; amount: number | string; description: string; evidence_paths: string[] | null; published_at: string | null }) => ({
+                id: item.id,
+                amount: Number(item.amount) || 0,
+                description: item.description,
+                evidencePaths: item.evidence_paths ?? [],
+                publishedAt: item.published_at,
+              }))}
             />
 
             {isPersonalCampaign ? <PersonalVerificationDocuments /> : <VerificationDocuments licenseStatus={organization?.license_status ?? "pending"} />}
@@ -292,12 +302,14 @@ function CashflowTree({
   campaignType,
   executionAmount,
   operationAmount,
+  disbursements,
 }: {
   targetAmount: number;
   receivedAmount: number;
   campaignType: string;
   executionAmount: number;
   operationAmount: number;
+  disbursements: Array<{ id: string; amount: number; description: string; evidencePaths: string[]; publishedAt: string | null }>;
 }) {
   return (
     <section className="mt-6 rounded-[14px] border border-line bg-white p-4 sm:p-6">
@@ -313,12 +325,18 @@ function CashflowTree({
         {campaignType === "direct" ? (
           <>
             <TreeNode icon="📋" label="Ví thực thi (90%)" amount={executionAmount} meta="Chỉ giải ngân theo tiến độ và chứng từ xác thực" tone="exec">
-              <TreeNode icon="🎓" label="Các đợt giải ngân" meta="Chưa có dữ liệu giải ngân công khai" tone="alloc" dimmed />
+              {disbursements.length === 0 ? <TreeNode icon="🎓" label="Các đợt giải ngân" meta="Chưa có dữ liệu giải ngân công khai" tone="alloc" dimmed /> : disbursements.map((item) => (
+                <TreeNode key={item.id} icon="🧾" label={item.description} amount={item.amount} meta={`Admin hậu kiểm hợp lệ · ${item.evidencePaths.length} chứng từ`} tone="alloc">
+                  {item.evidencePaths.length ? <div className="ml-7 flex flex-wrap gap-2 py-2 pl-4">{item.evidencePaths.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" className="text-xs font-bold text-sky hover:underline">Xem chứng từ {index + 1}</a>)}</div> : null}
+                </TreeNode>
+              ))}
             </TreeNode>
             <TreeNode icon="⚙" label="Ví vận hành (10%)" amount={operationAmount} meta="Logistics, xác thực và chi phí vận hành Quỹ" tone="ops" />
           </>
         ) : (
-          <TreeNode icon="🔗" label="Phân bổ cho đối tác thụ hưởng" amount={receivedAmount} meta="Tiền được nhận qua tài khoản trung tâm VEA, sau đó phân bổ và công khai chứng từ theo hồ sơ đã duyệt" tone="exec" />
+          <TreeNode icon="🔗" label="Phân bổ cho đối tác thụ hưởng" amount={receivedAmount} meta="Tiền được nhận qua tài khoản trung tâm VEA, sau đó phân bổ và công khai chứng từ theo hồ sơ đã duyệt" tone="exec">
+            {disbursements.map((item) => <TreeNode key={item.id} icon="🧾" label={item.description} amount={item.amount} meta={`Admin hậu kiểm hợp lệ · ${item.evidencePaths.length} chứng từ`} tone="alloc" />)}
+          </TreeNode>
         )}
       </TreeNode>
       <p className="mt-4 rounded-[8px] bg-paper px-3 py-2 text-xs leading-5 text-inkSoft">Dữ liệu Cashflow Tree sẽ tự động thay đổi khi hệ thống ghi nhận transaction và hồ sơ giải ngân hợp lệ.</p>

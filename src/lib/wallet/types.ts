@@ -28,7 +28,33 @@ export type WalletTopupItem = {
 
 export type WalletLedgerItem = {
   id: string;
+  entryType: "topup" | "allocation" | "reversal";
   amountVnd: number;
+  campaignId: string | null;
+  transactionId: string | null;
   note: string | null;
   createdAt: string;
 };
+
+export type WalletCampaign = {
+  id: string;
+  slug: string;
+  title: string;
+  ownerName: string;
+};
+
+export type WalletAllocationItem = {
+  id: string;
+  campaignId: string;
+  transactionId: string | null;
+  amountVnd: number;
+  status: "completed" | "reversed";
+  reversalReason: string | null;
+  createdAt: string;
+  campaignTitle: string;
+  campaignSlug: string;
+};
+
+export type WalletAllocationResult =
+  | { ok: true; message: string; balanceAfterVnd: number; txRef: string }
+  | { ok: false; message: string };

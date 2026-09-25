@@ -3,10 +3,13 @@
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { createWalletTopup } from "@/app/wallet/actions";
+import Link from "next/link";
+import { allocateWalletToCampaign, createWalletTopup } from "@/app/wallet/actions";
 import {
   WALLET_MAX_TOPUP,
   WALLET_MIN_TOPUP,
+  type WalletAllocationItem,
+  type WalletCampaign,
   type WalletLedgerItem,
   type WalletTopupIntent,
   type WalletTopupItem,
@@ -18,15 +21,37 @@ const presets = [10_000, 50_000, 200_000, 500_000, 1_000_000, 2_000_000];
 const statusLabel = { pending: "Chờ Admin đối soát", completed: "Đã cộng vào ví", rejected: "Không được xác nhận" } as const;
 const statusClass = { pending: "bg-nghe/15 text-ngheDeep", completed: "bg-lua/15 text-lua", rejected: "bg-son/10 text-son" } as const;
 
-export function WalletPanel({ balance, ledger, topups, loadError }: { balance: number; ledger: WalletLedgerItem[]; topups: WalletTopupItem[]; loadError: string | null }) {
+export function WalletPanel({ balance, ledger, topups, allocations, campaigns, loadError }: { balance: number; ledger: WalletLedgerItem[]; topups: WalletTopupItem[]; allocations: WalletAllocationItem[]; campaigns: WalletCampaign[]; loadError: string | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [amount, setAmount] = useState("500000");
   const [error, setError] = useState<string | null>(null);
   const [intent, setIntent] = useState<WalletTopupIntent | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [allocationAmount, setAllocationAmount] = useState("100000");
+  const [campaignId, setCampaignId] = useState(campaigns[0]?.id ?? "");
+  const [allocationNotice, setAllocationNotice] = useState<{ ok: boolean; message: string } | null>(null);
+  const [allocationRequestId, setAllocationRequestId] = useState("");
   const numericAmount = Number(amount || 0);
   const pendingTotal = topups.filter((item) => item.status === "pending").reduce((sum, item) => sum + item.amountVnd, 0);
+
+  function allocate(formData: FormData) {
+    setAllocationNotice(null);
+    formData.set("amountVnd", allocationAmount);
+    formData.set("campaignId", campaignId);
+    const requestId = allocationRequestId || window.crypto.randomUUID();
+    if (!allocationRequestId) setAllocationRequestId(requestId);
+    formData.set("requestId", requestId);
+    startTransition(() => {
+      void allocateWalletToCampaign(formData).then((result) => {
+        setAllocationNotice(result);
+        if (result.ok) {
+          setAllocationRequestId(window.crypto.randomUUID());
+          router.refresh();
+        }
+      }).catch(() => setAllocationNotice({ ok: false, message: "Không thể phân bổ số dư. Vui lòng thử lại." }));
+    });
+  }
 
   function submit(formData: FormData) {
     setError(null);
@@ -72,7 +97,7 @@ export function WalletPanel({ balance, ledger, topups, loadError }: { balance: n
           <p className="mt-1 font-mono text-3xl font-bold text-nghe">{currency.format(balance)}đ</p>
           <p className="mt-4 text-xs leading-5 text-white/70">
             {pendingTotal > 0 ? `${currency.format(pendingTotal)}đ đang chờ Admin đối soát (chưa tính vào số dư). ` : ""}
-            Tính năng dùng số dư để ủng hộ chiến dịch sẽ được bổ sung sau khi chốt cách vận hành.
+            Mỗi lần phân bổ được ghi thành bút toán trừ bất biến và một giao dịch ủng hộ riêng. Hệ thống khóa số dư trong lúc xử lý để tránh chi hai lần.
           </p>
         </section>
 
@@ -116,6 +141,34 @@ export function WalletPanel({ balance, ledger, topups, loadError }: { balance: n
       </div>
 
       <section className="panel">
+        <div className="grid gap-6 md:grid-cols-[1fr_0.9fr]">
+          <form action={allocate} className="space-y-4">
+            <div>
+              <p className="eyebrow">Phân bổ số dư</p>
+              <h2 className="mt-1 font-serif text-xl font-semibold text-chamDeep">Ủng hộ chiến dịch từ ví</h2>
+              <p className="mt-1 text-sm leading-6 text-inkMid">Khoản tiền được trừ khỏi ví và ghi nhận ngay vào tổng tiền thực nhận của chiến dịch.</p>
+            </div>
+            {allocationNotice ? <p className={`rounded-[8px] p-3 text-sm ${allocationNotice.ok ? "bg-lua/10 text-lua" : "bg-son/10 text-son"}`}>{allocationNotice.message}</p> : null}
+            <label className="grid gap-1 text-sm font-semibold text-chamDeep">Chiến dịch
+              <select value={campaignId} onChange={(event) => setCampaignId(event.target.value)} required className="rounded-[8px] border border-line bg-white px-4 py-3 font-normal outline-none focus:border-son">
+                {campaigns.length === 0 ? <option value="">Chưa có chiến dịch đang nhận ủng hộ</option> : null}
+                {campaigns.map((campaign) => <option key={campaign.id} value={campaign.id}>{campaign.title} · {campaign.ownerName}</option>)}
+              </select>
+            </label>
+            <label className="grid gap-1 text-sm font-semibold text-chamDeep">Số tiền phân bổ (VND)
+              <input inputMode="numeric" value={allocationAmount} onChange={(event) => setAllocationAmount(event.target.value.replace(/[^0-9]/g, "").slice(0, 11))} required className="rounded-[8px] border border-line px-4 py-3 font-mono font-normal outline-none focus:border-son" />
+              <span className="text-xs font-normal text-inkSoft">Khả dụng: {currency.format(balance)}đ · Tối thiểu {currency.format(WALLET_MIN_TOPUP)}đ</span>
+            </label>
+            <button type="submit" disabled={pending || !campaignId || Number(allocationAmount) < WALLET_MIN_TOPUP || Number(allocationAmount) > balance} className="button-primary w-full disabled:opacity-50">{pending ? "Đang phân bổ…" : "Xác nhận phân bổ"}</button>
+          </form>
+          <div className="rounded-[10px] bg-paper p-4">
+            <h3 className="font-serif text-lg font-semibold text-chamDeep">Phân bổ gần đây</h3>
+            {allocations.length === 0 ? <p className="mt-3 text-sm text-inkSoft">Chưa có khoản phân bổ nào.</p> : <ul className="mt-3 space-y-2">{allocations.slice(0, 6).map((item) => <li key={item.id} className="rounded-[8px] border border-line bg-white p-3 text-sm"><div className="flex items-start justify-between gap-3"><Link href={item.campaignSlug ? `/campaigns/${item.campaignSlug}` : "/campaigns"} className="font-semibold text-chamDeep hover:text-son">{item.campaignTitle}</Link><span className={`font-mono font-bold ${item.status === "completed" ? "text-son" : "text-lua"}`}>{item.status === "completed" ? "−" : "+"}{currency.format(item.amountVnd)}đ</span></div><div className="mt-1 text-xs text-inkSoft">{dateTime.format(new Date(item.createdAt))} · {item.status === "completed" ? "Đã ghi nhận" : "Đã hoàn tác"}</div>{item.reversalReason ? <div className="mt-1 text-xs text-son">Lý do: {item.reversalReason}</div> : null}</li>)}</ul>}
+          </div>
+        </div>
+      </section>
+
+      <section className="panel">
         <h2 className="font-serif text-xl font-semibold text-chamDeep">Yêu cầu nạp ví</h2>
         {topups.length === 0 ? <p className="mt-3 text-sm text-inkSoft">Bạn chưa có yêu cầu nạp nào.</p> : (
           <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="text-xs uppercase text-inkMid"><tr><th className="py-2 pr-3">Mã</th><th className="py-2 pr-3">Số tiền</th><th className="py-2 pr-3">Tạo lúc</th><th className="py-2">Trạng thái</th></tr></thead>
@@ -131,7 +184,7 @@ export function WalletPanel({ balance, ledger, topups, loadError }: { balance: n
       <section className="panel">
         <h2 className="font-serif text-xl font-semibold text-chamDeep">Lịch sử số dư</h2>
         {ledger.length === 0 ? <p className="mt-3 text-sm text-inkSoft">Chưa có biến động số dư.</p> : (
-          <ul className="mt-3 divide-y divide-line text-sm">{ledger.map((item) => <li key={item.id} className="flex items-center justify-between gap-3 py-2.5"><span><span className="font-semibold text-chamDeep">{item.note ?? "Biến động số dư"}</span><span className="block text-xs text-inkSoft">{dateTime.format(new Date(item.createdAt))}</span></span><span className={`font-mono font-bold ${item.amountVnd >= 0 ? "text-lua" : "text-son"}`}>{item.amountVnd >= 0 ? "+" : "−"}{currency.format(Math.abs(item.amountVnd))}đ</span></li>)}</ul>
+          <ul className="mt-3 divide-y divide-line text-sm">{ledger.map((item) => <li key={item.id} className="flex items-center justify-between gap-3 py-2.5"><span><span className="font-semibold text-chamDeep">{item.note ?? "Biến động số dư"}</span><span className="block text-xs text-inkSoft">{dateTime.format(new Date(item.createdAt))} · {item.entryType === "topup" ? "Nạp ví" : item.entryType === "allocation" ? "Phân bổ chiến dịch" : "Hoàn tác"}</span></span><span className={`font-mono font-bold ${item.amountVnd >= 0 ? "text-lua" : "text-son"}`}>{item.amountVnd >= 0 ? "+" : "−"}{currency.format(Math.abs(item.amountVnd))}đ</span></li>)}</ul>
         )}
       </section>
     </div>

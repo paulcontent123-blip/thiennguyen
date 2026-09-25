@@ -8,7 +8,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   const initialPanel = isAdminPanelKey(requestedPanel) ? requestedPanel : undefined;
   const { supabase } = await requirePageRole(["admin"], "/admin");
 
-  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes, resourceNeedsRes, resourceOffersRes, resourceClaimsRes, walletTopupsRes] = await Promise.all([
+  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes, resourceNeedsRes, resourceOffersRes, resourceClaimsRes, walletTopupsRes, walletAllocationsRes] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id, title, owner_type, owner_user_id, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
@@ -24,7 +24,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     supabase
       .from("disbursements")
       .select(
-        "id, amount, description, status, evidence_paths, submitted_at, representative_approved_at, post_audit_status, post_audited_at, post_audit_note, campaigns(title)"
+        "id, amount, description, status, evidence_paths, submitted_at, representative_approved_at, post_audit_status, post_audited_at, post_audit_note, explanation, explanation_submitted_at, published_at, campaigns(title)"
       )
       .order("representative_approved_at", { ascending: false }),
     supabase
@@ -52,7 +52,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     supabase
       .from("transactions")
       .select(
-        "id, tx_ref, amount_vnd, currency, status, donor_name, receipt_email, transfer_description, receiving_bank_id, receiving_account_no, receiving_account_name, failure_reason, created_at, expires_at, completed_at, campaigns(title, slug)"
+        "id, tx_ref, amount_vnd, currency, status, donor_name, receipt_email, transfer_description, receiving_bank_id, receiving_account_no, receiving_account_name, failure_reason, created_at, expires_at, completed_at, receipt_pdf_hash, receipt_email_status, receipt_email_attempts, receipt_email_last_error, campaigns(title, slug)"
       )
       .order("created_at", { ascending: false })
       .limit(200),
@@ -82,6 +82,11 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
     supabase
       .from("wallet_topups")
       .select("id, user_id, tx_ref, amount_vnd, status, transfer_description, receiving_account_name, receiving_account_no, admin_note, created_at, completed_at, profiles!wallet_topups_user_id_fkey(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(200),
+    supabase
+      .from("wallet_allocations")
+      .select("id, user_id, amount_vnd, status, reversal_reason, created_at, profiles!wallet_allocations_user_id_fkey(full_name), campaigns(title), transactions!wallet_allocations_transaction_id_fkey(tx_ref)")
       .order("created_at", { ascending: false })
       .limit(200),
   ]);
@@ -141,6 +146,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       transactions={transactionsRes.data ?? []}
       corporateInquiries={corporateInquiriesRes.data ?? []}
       walletTopups={walletTopupsRes.data ?? []}
+      walletAllocations={walletAllocationsRes.data ?? []}
       resourceNeeds={resourceNeeds}
       resourceOffers={resourceOffers}
       resourceClaims={resourceClaims}

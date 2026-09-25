@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CampaignContentManager } from "@/components/organization/campaign-content-manager";
+import { DisbursementManager, type ManagedDisbursement } from "@/components/organization/disbursement-manager";
 import { SiteHeader } from "@/components/site-header";
 import { requirePageRole } from "@/lib/auth/server";
 import type { CampaignMedia, CampaignSeo, CampaignShareSettings, CampaignUpdate } from "@/lib/campaigns/content";
@@ -45,6 +46,8 @@ type Disbursement = {
   post_audit_status: string;
   post_audited_at: string | null;
   post_audit_note: string | null;
+  explanation: string | null;
+  published_at: string | null;
   created_at: string;
 };
 
@@ -121,7 +124,7 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
 
   const { data: organization, error: organizationError } = await supabase
     .from("organizations")
-    .select("id, name")
+    .select("id, name, legal_representative_name")
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -153,7 +156,7 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
       .order("created_at", { ascending: false }),
     supabase
       .from("disbursements")
-      .select("id, amount, description, status, evidence_paths, submitted_at, representative_approved_at, post_audit_status, post_audited_at, post_audit_note, created_at")
+      .select("id, amount, description, status, evidence_paths, submitted_at, representative_approved_at, post_audit_status, post_audited_at, post_audit_note, explanation, published_at, created_at")
       .eq("campaign_id", campaign.id)
       .order("created_at", { ascending: false }),
     supabase
@@ -222,7 +225,10 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
               <h1 className="mt-2 max-w-3xl font-serif text-3xl font-semibold text-chamDeep">{typedCampaign.title}</h1>
               <p className="mt-2 text-sm text-inkSoft">Tổ chức: {organization.name}</p>
             </div>
-            <StatusPill status={typedCampaign.status} />
+            <div className="flex flex-col items-end gap-2">
+              <StatusPill status={typedCampaign.status} />
+              {['active', 'closed'].includes(typedCampaign.status) ? <Link href={`/campaign-closure/${typedCampaign.id}`} className="rounded-[7px] border border-son px-3 py-2 text-xs font-bold text-son hover:bg-son hover:text-white">Dashboard tất toán</Link> : null}
+            </div>
           </div>
           {typedCampaign.review_note ? (
             <div className="mt-5 rounded-[8px] border border-son/20 bg-son/10 px-4 py-3 text-sm text-son">
@@ -247,6 +253,12 @@ export default async function OrganizationCampaignDetailPage({ params }: { param
               <p className="mt-4 whitespace-pre-wrap text-sm leading-7 text-inkMid">{typedCampaign.description || typedCampaign.summary || "Chưa có mô tả."}</p>
               {typedCampaign.category ? <p className="mt-5 text-xs font-bold uppercase tracking-wide text-inkSoft">Hạng mục: {typedCampaign.category}</p> : null}
             </section>
+
+            <DisbursementManager
+              campaignId={typedCampaign.id}
+              representativeName={organization.legal_representative_name}
+              disbursements={typedDisbursements as ManagedDisbursement[]}
+            />
 
             <section className="rounded-[12px] border border-line bg-white p-6">
               <div className="flex items-center justify-between gap-3">

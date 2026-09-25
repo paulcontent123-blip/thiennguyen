@@ -712,11 +712,11 @@ flowchart LR
 | ID | Tên Use Case | Actor chính | Trạng thái |
 |---|---|---|---|
 | UC-DON-01 | Ủng hộ bằng tiền mặt qua VietQR | Nhà hảo tâm | 🟢 UI / 🟡 backend |
-| UC-DON-02 | Phân bổ số dư ví riêng cho chiến dịch sau khi nạp | Nhà hảo tâm | 🔴 Chưa có backend ví/ledger |
-| UC-DON-03 | Nạp tiền vào ví riêng, chưa gắn campaign | Nhà hảo tâm | 🔴 Chưa có backend ví/ledger |
+| UC-DON-02 | Phân bổ số dư ví riêng cho chiến dịch sau khi nạp | Nhà hảo tâm | 🟢 UI + RPC nguyên tử + ledger |
+| UC-DON-03 | Nạp tiền vào ví riêng, chưa gắn campaign | Nhà hảo tâm | 🟢 UI + Admin đối soát + ledger |
 | UC-DON-04 | Mở app ngân hàng qua deep link (VCB/TCB/MBBank/Momo) | Nhà hảo tâm | 🟡 |
 | UC-DON-05 | Đối soát Webhook ngân hàng & cập nhật giao dịch | Ngân hàng (actor phụ) | 🟡 (mô phỏng) |
-| UC-DON-06 | Nhận & tải biên nhận điện tử (PDF, hash SHA-256) | Nhà hảo tâm | 🟢 UI / 🟡 backend |
+| UC-DON-06 | Nhận & tải biên nhận điện tử (PDF, hash SHA-256) | Nhà hảo tâm | 🟢 PDF server + hash + email retry/idempotency |
 | UC-DON-07 | Giả lập giao dịch demo (kiểm chứng luồng VietQR) | Khách vãng lai / Nhà hảo tâm | 🟢 (chỉ mục đích demo) |
 
 ### Module D — Nguồn lực phi tiền tệ (`UC-RES`)
@@ -756,7 +756,7 @@ flowchart LR
 | UC-CAMP-01 | Tạo chiến dịch mới (chọn loại Trực tiếp/Kết nối, gửi hồ sơ xác minh) | Tổ chức từ thiện / Nhà hảo tâm đã xác minh | 🟢 UI + backend/RLS / 🟡 Admin duyệt |
 | UC-CAMP-02 | Đăng bài cập nhật / nhật ký tiến độ chiến dịch | Tổ chức từ thiện | 🟢 (hiển thị) / 🔴 (đăng bài thật) |
 | UC-CAMP-03 | Đóng cổng chiến dịch & xem dashboard tổng kết | Tổ chức từ thiện | 🟢 |
-| UC-CAMP-04 | Xuất báo cáo CSV/PDF khi đóng cổng | Tổ chức từ thiện | 🟢 UI / 🔴 backend |
+| UC-CAMP-04 | Xuất báo cáo CSV/PDF khi đóng cổng | Tổ chức từ thiện | 🟢 CSV thật + in/lưu PDF từ trình duyệt |
 | UC-CAMP-05 | Xuất Gói ESG ZIP khi đóng cổng | Tổ chức từ thiện | 🟢 UI / 🔴 backend |
 | UC-CAMP-06 | Chỉnh sửa và gửi duyệt chiến dịch cá nhân | Nhà hảo tâm đã xác minh | 🟢 UI + backend/RLS |
 
@@ -764,10 +764,10 @@ flowchart LR
 
 | ID | Tên Use Case | Actor chính | Trạng thái |
 |---|---|---|---|
-| UC-DISB-01 | Upload chứng từ và ký/approval hồ sơ giải ngân | Người đại diện pháp luật | 🟡 UI / 🔴 backend |
-| UC-DISB-02 | Ghi nhận và công khai khoản chi theo chính sách minh bạch | Hệ thống | 🔴 backend |
-| UC-DISB-03 | Hậu kiểm hồ sơ giải ngân | Quản trị viên | 🟢 UI / 🔴 backend |
-| UC-DISB-04 | Yêu cầu giải trình/bổ sung hoặc ghi nhận vi phạm | Quản trị viên | 🟢 UI / 🔴 backend |
+| UC-DISB-01 | Upload chứng từ và ký/approval hồ sơ giải ngân | Người đại diện pháp luật | 🟢 UI + backend + audit history |
+| UC-DISB-02 | Ghi nhận và công khai khoản chi theo chính sách minh bạch | Hệ thống | 🟢 chỉ công khai sau hậu kiểm hợp lệ |
+| UC-DISB-03 | Hậu kiểm hồ sơ giải ngân | Quản trị viên | 🟢 UI + backend |
+| UC-DISB-04 | Yêu cầu giải trình/bổ sung hoặc ghi nhận vi phạm | Quản trị viên | 🟢 UI + backend + gửi lại giải trình |
 | UC-DISB-05 | Đối chiếu mã hóa đơn VAT khi hậu kiểm (nếu tích hợp) | API Tổng cục Thuế (actor phụ) | 🔴 / tùy chọn |
 
 ### Module H — Minh bạch & Báo cáo (`UC-TRANS`)
@@ -780,14 +780,14 @@ flowchart LR
 | UC-TRANS-04 | Xem báo cáo theo từng chiến dịch đã đóng cổng | Khách vãng lai | 🟢 |
 | UC-TRANS-05 | Xem danh sách/hồ sơ Người thụ hưởng (đã masking) | Khách vãng lai | 🟢 |
 | UC-TRANS-06 | Xem danh sách/hồ sơ Tổ chức | Khách vãng lai | 🟢 |
-| UC-TRANS-07 | Xuất CSV/PDF báo cáo minh bạch | Khách vãng lai | 🟢 UI / 🔴 backend |
+| UC-TRANS-07 | Xuất CSV/PDF báo cáo minh bạch | Khách vãng lai | 🟡 CSV thật + in/lưu PDF; chưa có file niêm phong server-side |
 
 ### Module I — Tài khoản cá nhân (`UC-ACC`)
 
 | ID | Tên Use Case | Actor chính | Trạng thái |
 |---|---|---|---|
 | UC-ACC-01 | Xem Dashboard tổng quan cá nhân | Nhà hảo tâm | 🟢 |
-| UC-ACC-02 | Nạp ví riêng rồi chủ động phân bổ số dư vào campaign | Nhà hảo tâm | 🔴 Chưa có ví/ledger thật |
+| UC-ACC-02 | Nạp ví riêng rồi chủ động phân bổ số dư vào campaign | Nhà hảo tâm | 🟢 Có khóa số dư, chống chi hai lần và hoàn tác Admin |
 | UC-ACC-03 | Xem & lọc Lịch sử giao dịch | Nhà hảo tâm | 🟢 |
 | UC-ACC-04 | Theo dõi tiến trình dòng tiền của giao dịch cá nhân | Nhà hảo tâm | 🟢 |
 | UC-ACC-05 | Xem & tải Kho chứng nhận | Nhà hảo tâm | 🟢 |
@@ -944,19 +944,19 @@ flowchart LR
   7. Người dùng hoàn tất chuyển khoản trên app ngân hàng (ngoài phạm vi hệ thống).
   8. Ngân hàng gửi Webhook biến động số dư về hệ thống (UC-DON-05) → giao dịch chuyển trạng thái "completed", khớp với `tx_ref`.
   9. Hệ thống cập nhật Cashflow Tree công khai của chiến dịch + gửi biên nhận PDF qua email (UC-DON-06) + đẩy thông báo push cho người dùng.
-- **Luồng thay thế dự kiến:** Chọn "Từ ví" → dùng số dư đã đối soát, tạo bút toán phân bổ riêng (UC-DON-02); backend ví chưa có nên không được xác nhận thành công ngay từ UI. Chọn "Vật phẩm" → chuyển sang form đăng ký cho nhu cầu đã duyệt (UC-RES-04), không coi bấm đăng ký là đã bàn giao.
+- **Luồng thay thế đã triển khai:** Tại `/wallet`, chọn campaign và số tiền → RPC khóa số dư, ghi bút toán âm và tạo giao dịch hoàn tất (UC-DON-02). Chọn "Vật phẩm" → chuyển sang form đăng ký cho nhu cầu đã duyệt (UC-RES-04), không coi bấm đăng ký là đã bàn giao.
 - **Ngoại lệ:** Hết thời gian chờ webhook / không khớp `tx_ref` → giao dịch treo ở trạng thái "pending" (cần cơ chế đối soát thủ công ở Admin Portal — hiện chưa có UI riêng cho việc này, đây là gap 🔴).
 - **Hậu điều kiện:** Giao dịch được ghi nhận vào `transactions`, Cashflow Tree công khai cập nhật realtime, người ủng hộ có biên nhận trong Kho chứng nhận (UC-ACC-05).
 - **Quy tắc nghiệp vụ đã cập nhật:** Chiến dịch loại "Kết nối" (partner) không áp dụng tách 90/10. Tiền vẫn đi qua tài khoản trung tâm VEA để đối soát, sau đó được phân bổ cho đối tác thụ hưởng theo hồ sơ được duyệt.
 
 #### UC-DON-02 — Ủng hộ từ số dư Ví nội bộ
 - Actor chính: Nhà hảo tâm. Người dùng chọn campaign và số tiền muốn phân bổ từ ví riêng; hệ thống chỉ ghi nhận khoản ủng hộ sau khi kiểm tra số dư khả dụng, campaign hợp lệ và tạo bút toán trừ ví thành công. Không quét QR ngân hàng lần nữa cho bước phân bổ.
-- **Tiền điều kiện:** Tiền nạp đã được đối soát và ghi có qua UC-DON-03. Chưa có backend ví/ledger; không được coi thao tác UI là giao dịch hoàn thành.
+- **Tiền điều kiện:** Tiền nạp đã được Admin đối soát và ghi có qua UC-DON-03. RPC phân bổ khóa hàng `wallet_accounts`, kiểm tra số dư, tạo đồng thời `wallet_allocations`, bút toán âm và `transactions(status=completed)`; nếu một bước lỗi thì toàn bộ transaction database được rollback.
 
 #### UC-DON-03 — Nạp tiền vào Ví
 - **Quyết định Tech Lead:** Đây là nạp tiền vào ví riêng của người dùng để **phân bổ sau**, không phải lối tắt ủng hộ trực tiếp một campaign.
 - **Luồng dự kiến:** Nhà hảo tâm chọn số tiền nạp → hệ thống tạo mã tham chiếu riêng cho khoản nạp và hiển thị kênh thanh toán phù hợp → chỉ khi ngân hàng xác nhận, hệ thống mới ghi bút toán tăng số dư chưa phân bổ. Mỗi lần phân bổ sau đó tạo bút toán riêng liên kết campaign; không dùng trực tiếp `wallet_balance` như nguồn sự thật duy nhất.
-- **Trạng thái:** Đã chốt ý nghĩa nghiệp vụ, **chưa triển khai ví thật**. Chưa được chốt đơn vị giữ tiền/quyền cung ứng ví, cơ chế hoàn/rút tiền, phí, hạn mức, sổ cái và đối soát; phải chốt với pháp lý/tài chính trước khi bật nạp tiền thật.
+- **Trạng thái:** Đã triển khai sổ cái nạp/phân bổ/hoàn tác và màn hình Admin đối soát. Việc bật tiền thật vẫn cần Legal/Finance xác nhận đơn vị giữ tiền, quyền cung ứng ví, chính sách rút tiền, phí và hạn mức.
 
 #### UC-DON-04 — Mở app ngân hàng qua deep link
 - Actor chính: Nhà hảo tâm. Trong `vietqr-modal`, bấm 1 trong 4 nút ngân hàng (Vietcombank/Techcombank/MBBank/Momo) → mở app tương ứng với thông tin chuyển khoản đã điền sẵn (số TK, số tiền, nội dung). Prototype hiện chỉ hiển thị toast mô phỏng; production cần cấu hình deep link scheme riêng từng ngân hàng.
@@ -973,7 +973,7 @@ flowchart LR
 - Trong prototype hiện tại: được mô phỏng bằng `openDemoTx()` / `simPayStep2()` — log webhook giả lập tốc độ 200ms/dòng, hiển thị receipt đầy đủ (UC-DON-07).
 
 #### UC-DON-06 — Nhận & tải biên nhận điện tử
-- Actor chính: Nhà hảo tâm. Sau khi giao dịch khớp, `receipt-modal` hiển thị đầy đủ: mã giao dịch, ngày giờ, người ủng hộ, chiến dịch, tổ chức nhận, số TK, loại chiến dịch, phí nền tảng (0đ), tổng tiền, hash SHA-256 rút gọn. Có 2 hành động: "Tải PDF →" và "Email". Biên nhận song ngữ VND/USD dành cho kiều bào đối soát thuế nước sở tại.
+- Actor chính: Nhà hảo tâm. Sau khi giao dịch được xác nhận, server sinh PDF xác định từ snapshot giao dịch, tính SHA-256, đính kèm PDF vào email và lưu trạng thái gửi/số lần thử/lỗi gần nhất. `receipt-modal` hiển thị mã giao dịch, ngày giờ, người ủng hộ, chiến dịch, tài khoản nhận, tổng tiền và SHA-256. Admin có nút gửi lại khi email thất bại; provider dùng idempotency key cố định theo transaction. Bản song ngữ VND/USD chưa nằm trong phạm vi đã triển khai.
 
 #### UC-DON-07 — Giả lập giao dịch demo
 - Actor chính: Khách vãng lai/Nhà hảo tâm (mục đích trình diễn sản phẩm cho đối tác/nhà đầu tư). Mở `demo-tx-modal`: xem QR + thông tin giao dịch mẫu → `simPayStep2()` giả lập log webhook nhận biến động số dư theo thời gian thực → hiển thị receipt hoàn chỉnh. Không ảnh hưởng dữ liệu giao dịch thật.
@@ -1086,11 +1086,11 @@ flowchart LR
 
 #### UC-CAMP-03 — Đóng cổng chiến dịch & xem dashboard tổng kết
 - **Actor chính:** Tổ chức từ thiện
-- **Luồng sự kiện chính:** Khi chiến dịch kết thúc, hệ thống chuyển sang `pg-closure`: hiển thị con dấu "✓ CHIẾN DỊCH ĐÃ ĐÓNG", 4 chỉ số tổng kết (Tổng tiền nhận, Tổng đã giải ngân, Số dư chuyển sang quỹ năm sau, Số nhà hảo tâm), toàn bộ Cashflow Tree hoàn tất, và bảng danh sách nhà hảo tâm (lọc Tất cả/Công khai/Ẩn danh).
+- **Luồng sự kiện chính:** Khi chiến dịch kết thúc, hệ thống mở `/campaign-closure/[id]`: hiển thị con dấu "✓ CHIẾN DỊCH ĐÃ ĐÓNG", tổng tiền thực nhận, tổng giải ngân đã hậu kiểm hợp lệ, số dư, số nhà hảo tâm, Cashflow Tree, bằng chứng giải ngân và tiến độ nguồn lực phi tiền tệ. Không công khai email hoặc danh tính nhà hảo tâm trên báo cáo.
 - **Hậu điều kiện:** Trạng thái chiến dịch = `closed`; dữ liệu trở thành báo cáo public dashboard vĩnh viễn (liên kết UC-TRANS-04).
 
 #### UC-CAMP-04 — Xuất báo cáo CSV/PDF khi đóng cổng
-- Actor chính: Tổ chức từ thiện. Từ `pg-closure`, bấm "Xuất CSV" hoặc "Xuất PDF" → tải về toàn bộ dữ liệu giao dịch + giải ngân của chiến dịch.
+- Actor chính: Tổ chức từ thiện / Admin. Từ `/campaign-closure/[id]`, bấm "Xuất CSV" để tải số liệu tất toán và các khoản giải ngân hợp lệ; bấm "In / lưu PDF" để dùng hộp thoại in của trình duyệt. File không chứa email hoặc dữ liệu nhạy cảm của nhà hảo tâm.
 
 #### UC-CAMP-05 — Xuất Gói ESG ZIP khi đóng cổng
 - Actor chính: Tổ chức từ thiện. Bấm "📦 Gói ESG ZIP" → hệ thống đóng gói Hóa đơn VAT + Ảnh EXIF GPS + Biên bản nghiệm thu số, đạt chuẩn GRI 413-1/203-1 và UN SDG 1/3/4/17, phục vụ đối tác doanh nghiệp kiểm toán CSR (liên kết UC-CORP-07).
@@ -1110,7 +1110,7 @@ flowchart LR
 
 #### UC-DISB-02 — Ghi nhận và công khai khoản chi
 - **Actor chính:** Hệ thống.
-- Sau approval hợp lệ, hệ thống ghi nhận khoản chi vào Cashflow Tree và báo cáo minh bạch. Thời điểm công khai chính xác cần được cấu hình theo chính sách sản phẩm và không phụ thuộc vào một Checker nội bộ.
+- Sau approval của người đại diện, Admin hậu kiểm. Chỉ khi kết quả là `valid`, hệ thống chuyển hồ sơ sang `published`, đặt `published_at` và hiển thị khoản chi cùng liên kết chứng từ trong Cashflow Tree; `needs_explanation` và `violation` không được công khai.
 
 #### UC-DISB-03 — Admin hậu kiểm hồ sơ giải ngân ⭐
 - **Actor chính:** Quản trị viên.
@@ -1128,19 +1128,19 @@ flowchart LR
 
 ### MODULE H — MINH BẠCH & BÁO CÁO
 
-Tất cả use case trong module này dùng chung actor chính **Khách vãng lai** (không yêu cầu đăng nhập — đúng tinh thần "minh bạch công khai" của nền tảng), truy cập qua `pg-transparent` với 6 tab tương ứng.
+Các báo cáo tổng hợp dùng chung actor chính **Khách vãng lai** (không yêu cầu đăng nhập — đúng tinh thần "minh bạch công khai" của nền tảng), truy cập qua `/reports` hoặc `/transparency`. Số liệu được lấy từ giao dịch `completed` và hồ sơ giải ngân có hậu kiểm `valid`; không dùng dữ liệu minh họa.
 
 #### UC-TRANS-01 — Xem sao kê năm
 - Tab "Sao kê năm" (`trans-tab-finance`): toàn bộ giao dịch trong năm, kèm hash SHA-256 niêm phong theo ngày (không thể sửa số liệu quá khứ).
 
 #### UC-TRANS-02 — Xem báo cáo theo Quý
-- Tab "Báo cáo Quý" (`trans-tab-quarterly`): dữ liệu tách riêng Q1/Q2/Q3/Q4.
+- Tab "Theo quý" tại `/reports`: dữ liệu thật tách riêng Q1/Q2/Q3/Q4, có trạng thái kỳ đang cập nhật/đã kết thúc và xuất CSV.
 
 #### UC-TRANS-03 — Xem báo cáo Bán niên
-- Tab "Bán niên" (`trans-tab-biannual`): H1/H2 với tổng thu/chi/vận hành/số chiến dịch trong kỳ.
+- Tab "Bán niên" tại `/reports`: H1/H2 với tổng thực nhận, giải ngân hậu kiểm hợp lệ, lượt ủng hộ và số chiến dịch phát sinh trong kỳ.
 
 #### UC-TRANS-04 — Xem báo cáo theo từng chiến dịch
-- Tab "Theo chiến dịch" (`trans-tab-campaign-report`): danh sách các chiến dịch đã đóng cổng, mỗi chiến dịch dẫn tới dashboard tổng kết đầy đủ (liên kết UC-CAMP-03).
+- Tab "Theo chiến dịch" tại `/reports`: danh sách chiến dịch công khai đã đóng cổng, có tìm kiếm và liên kết tới `/campaign-closure/[id]` (liên kết UC-CAMP-03).
 
 #### UC-TRANS-05 — Xem danh sách người thụ hưởng
 - Tab "Người thụ hưởng" (`trans-tab-beneficiary`): thông tin đã masking SĐT/CCCD theo NĐ 13/2023/NĐ-CP.
@@ -1149,7 +1149,7 @@ Tất cả use case trong module này dùng chung actor chính **Khách vãng la
 - Tab "Tổ chức" (`trans-tab-org`): danh sách tổ chức đã qua KYC, liên kết tới UC-DISC-06.
 
 #### UC-TRANS-07 — Xuất CSV/PDF báo cáo minh bạch
-- Từ các tab trên, nút xuất CSV/PDF (dùng chung cơ chế với UC-CAMP-04). Backend export thật là gap 🔴.
+- Báo cáo năm, quý và bán niên có thể xuất CSV từ số liệu thật; báo cáo năm và dashboard tất toán hỗ trợ in/lưu PDF từ trình duyệt. File báo cáo niêm phong, ký số và lưu server-side vẫn là gap 🔴.
 
 ---
 
@@ -1163,7 +1163,7 @@ Truy cập qua `pg-account`, 7 panel điều hướng bằng `switchAccPanel`.
 #### UC-ACC-02 — Quản lý Ví & phân bổ ⭐
 - **Actor chính:** Nhà hảo tâm
 - **Quyết định Tech Lead:** “Nạp ví” là nạp vào số dư riêng để phân bổ **sau**, không phải ủng hộ thẳng vào campaign. Tiền nạp chưa phân bổ không được tính là tiền campaign đã nhận.
-- **Luồng dự kiến:** Xem số dư chưa phân bổ và lịch sử bút toán → nạp tiền qua UC-DON-03, chờ ngân hàng xác nhận → chủ động chọn campaign và số tiền phân bổ → hệ thống kiểm tra số dư/điều kiện campaign và ghi bút toán phân bổ riêng.
+- **Luồng đã triển khai:** Xem số dư chưa phân bổ và lịch sử bút toán → nạp tiền qua UC-DON-03, chờ Admin đối soát → chủ động chọn campaign và số tiền phân bổ → RPC khóa hàng số dư, kiểm tra campaign, ghi bút toán âm và giao dịch campaign trong cùng một database transaction. Admin có thể hoàn tác có lý do, tạo bút toán dương và chuyển transaction sang `refunded`.
 - **Ngoài phạm vi đã chốt:** Mua vật phẩm wishlist bằng ví, ủng hộ định kỳ và giao phó hệ thống tự phân bổ chưa có quy tắc pháp lý/đối soát/thuật toán đủ để triển khai.
 
 #### UC-ACC-03 — Xem & lọc Lịch sử giao dịch
@@ -3901,7 +3901,7 @@ Phạm vi: mọi thông tin **công khai**, đúng tinh thần "minh bạch khô
 - 🟢 Xem trang Giới thiệu (sứ mệnh, pháp lý, đội ngũ, so sánh, media kit) — `UC-DISC-07`
 - 🟢 Xem bản đồ SOS + chi tiết từng điểm SOS — `UC-SOS-01, 02`
 - 🟢 Xem toàn bộ 6 tab báo cáo Minh bạch (sao kê năm/quý/bán niên/theo chiến dịch/người thụ hưởng/tổ chức) — `UC-TRANS-01…06`
-- 🟢 UI xuất CSV/PDF báo cáo minh bạch (🔴 backend export thật) — `UC-TRANS-07`
+- 🟡 Xuất CSV từ số liệu thật và in/lưu PDF; chưa có file niêm phong server-side — `UC-TRANS-07`
 - 🟢 Phát tín hiệu SOS (chỉ cần xác minh OTP tại chỗ, không cần tài khoản trước đó) — `UC-SOS-03`
 - 🟢 Đăng ký tài khoản (Cá nhân / Doanh nghiệp-Tổ chức) — `UC-AUTH-01`
 - 🟢 Đăng nhập (Email/Mật khẩu, Google) — `UC-AUTH-02, 03`
@@ -3916,9 +3916,9 @@ Phạm vi: mọi thông tin **công khai**, đúng tinh thần "minh bạch khô
 Phạm vi: mọi thứ Khách vãng lai làm được, **cộng thêm** toàn bộ tương tác cần danh tính.
 
 - 🟢/🟡 Ủng hộ tiền mặt qua VietQR (chọn mức tiền, xem preview phân bổ 90/10, quét QR, mở deep link ngân hàng) — `UC-DON-01, 04`
-- 🟢/🔴 Ủng hộ từ số dư Ví nội bộ — `UC-DON-02`
-- 🔴 Nạp tiền vào ví riêng, chờ đối soát rồi phân bổ sau — `UC-DON-03` (chưa có backend ví/ledger)
-- 🟢/🟡 Nhận & tải biên nhận điện tử (PDF, hash SHA-256) — `UC-DON-06`
+- 🟢 Ủng hộ từ số dư Ví nội bộ — `UC-DON-02`
+- 🟢 Nạp tiền vào ví riêng, Admin đối soát và chủ động phân bổ sau — `UC-DON-02, 03`
+- 🟢 Nhận biên nhận PDF sinh phía server, hash SHA-256 và email có retry/idempotency — `UC-DON-06`
 - 🟢 Giả lập giao dịch demo (mục đích trình diễn) — `UC-DON-07`
 - 🟢/🔴 Yêu thích / theo dõi chiến dịch — `UC-DISC-05`
 - 🟡 Đăng ký khả năng đóng góp hiện vật / ngày công-kỹ năng / xe vận chuyển; Admin còn phải xác minh ghép và bàn giao — `UC-RES-01, 02, 03`
@@ -3927,7 +3927,7 @@ Phạm vi: mọi thứ Khách vãng lai làm được, **cộng thêm** toàn b�
 - 🟢 Liên hệ điều phối xe vận chuyển gần điểm SOS — `UC-RES-06`
 - 🟢 Đăng ký Tình nguyện viên ứng cứu cá nhân — `UC-SOS-04`
 - 🟢 Xem Dashboard tổng quan cá nhân (4 chỉ số + hoạt động gần đây) — `UC-ACC-01`
-- 🔴 Nạp ví riêng và chủ động phân bổ sau; chưa có backend ví/ledger — `UC-ACC-02`
+- 🟢 Nạp ví riêng và chủ động phân bổ sau; số dư được khóa trong RPC chống chi hai lần — `UC-ACC-02`
 - 🟢 Xem & lọc Lịch sử giao dịch — `UC-ACC-03`
 - 🟢 Theo dõi tiến trình dòng tiền của giao dịch cá nhân — `UC-ACC-04`
 - 🟢 Xem & tải Kho chứng nhận — `UC-ACC-05`
@@ -3975,10 +3975,10 @@ Phạm vi: chủ sở hữu 1 pháp nhân trên nền tảng, chịu trách nhi�
 - 🟢/🔴 Tạo chiến dịch mới — chọn loại Trực tiếp (phân bổ 90/10) hoặc Kết nối (VEA tiếp nhận tập trung và phân bổ cho đối tác) — `UC-CAMP-01`
 - 🟢/🔴 Đăng bài cập nhật / nhật ký tiến độ chiến dịch — `UC-CAMP-02`
 - 🟢 Đóng cổng chiến dịch & xem dashboard tổng kết — `UC-CAMP-03`
-- 🟢/🔴 Xuất báo cáo CSV/PDF khi đóng cổng — `UC-CAMP-04`
+- 🟢 Xuất CSV thật và in/lưu PDF khi đóng cổng — `UC-CAMP-04`
 - 🟢/🔴 Xuất Gói ESG ZIP khi đóng cổng — `UC-CAMP-05`
-- 🟡/🔴 Upload chứng từ, ký và approval hồ sơ giải ngân — `UC-DISB-01`
-- 🔴 Xem trạng thái hồ sơ của mình đang chờ duyệt (KYC/chiến dịch/giải ngân) — gap đã nêu nhiều lần, tổ chức hiện không có "cổng nhìn lại chính mình"
+- 🟢 Upload chứng từ, ký/approval, gửi giải trình và theo dõi hồ sơ giải ngân — `UC-DISB-01, 04`
+- 🟢 Xem trạng thái KYC, chiến dịch và giải ngân trong cổng tổ chức
 
 **Không được làm:** duyệt hồ sơ của tổ chức khác hoặc vào Admin Portal. MVP không có sub-role Maker/Checker hay chức năng mời thành viên tổ chức.
 
@@ -4020,7 +4020,7 @@ Phạm vi: vận hành toàn nền tảng, không thuộc về bất kỳ tổ c
 - 🟢 Xem Dashboard tổng quan hệ thống (hoạt động toàn nền tảng) — `UC-ADMIN-01`
 - 🟢/🔴 Duyệt / Từ chối chiến dịch mới đăng ký — `UC-ADMIN-02`
 - 🟢/🔴 Xác minh / Từ chối / Yêu cầu bổ sung giấy phép hoạt động tổ chức — `UC-ADMIN-03`
-- 🟢/🔴 Hậu kiểm giải ngân và yêu cầu giải trình — `UC-ADMIN-04`
+- 🟢 Hậu kiểm giải ngân, mở chứng từ, yêu cầu giải trình và công khai khoản chi hợp lệ — `UC-ADMIN-04`
 - 🟢/🔴 Quản lý SOS Reports, điều phối lực lượng và duyệt hồ sơ cứu trợ — `UC-ADMIN-05, UC-SOS-08, 09`
 
 **Chưa rõ / cần chốt chính sách:** có được vừa duyệt KYC vừa duyệt giải ngân cho cùng 1 tổ chức không (câu hỏi đã nêu ở tài liệu xác nhận Admin, mục 2.3); có phân cấp nhiều mức Admin không.

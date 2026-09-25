@@ -17,9 +17,11 @@ type DonationReceiptEmailInput = {
   to: string;
   donorName?: string;
   donationId: string;
+  txRef: string;
   campaignTitle: string;
   amount: number;
   pdf: Uint8Array;
+  sha256: string;
   filename?: string;
 };
 
@@ -79,8 +81,8 @@ export function sendDonationReceiptEmail(input: DonationReceiptEmailInput): Prom
   return getEmailProvider().send({
     to: input.to,
     subject: `Biên nhận ủng hộ chiến dịch ${input.campaignTitle}`,
-    text: `Xin chào ${input.donorName || "bạn"}, cảm ơn bạn đã ủng hộ ${input.campaignTitle} với số tiền ${amount}đ. Biên nhận PDF được đính kèm email này.`,
-    html: `<p>Xin chào ${donorName},</p><p>Cảm ơn bạn đã ủng hộ chiến dịch <strong>${campaignTitle}</strong> với số tiền <strong>${amount}đ</strong>.</p><p>Biên nhận PDF được đính kèm email này.</p>`,
+    text: `Xin chào ${input.donorName || "bạn"}, cảm ơn bạn đã ủng hộ ${input.campaignTitle} với số tiền ${amount}đ. Biên nhận PDF được đính kèm email này. Mã giao dịch: ${input.txRef}. SHA-256: ${input.sha256}.`,
+    html: `<p>Xin chào ${donorName},</p><p>Cảm ơn bạn đã ủng hộ chiến dịch <strong>${campaignTitle}</strong> với số tiền <strong>${amount}đ</strong>.</p><p>Biên nhận PDF được đính kèm email này.</p><p>Mã giao dịch: <strong>${escapeHtml(input.txRef)}</strong><br/>SHA-256: <code>${escapeHtml(input.sha256)}</code></p>`,
     attachments: [{ filename, content: input.pdf, contentType: "application/pdf" }],
     idempotencyKey: `donation-receipt:${input.donationId}`,
   });

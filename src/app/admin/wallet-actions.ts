@@ -38,3 +38,19 @@ export async function rejectWalletTopup(id: string, formData: FormData): Promise
   revalidatePath("/wallet");
   return { ok: true, message: `Đã từ chối ${data.tx_ref}.` };
 }
+
+export async function reverseWalletAllocation(id: string, formData: FormData): Promise<WalletTopupReviewResult> {
+  const { supabase } = await requireActionRole(["admin"]);
+  const reason = String(formData.get("reason") ?? "").trim();
+  if (reason.length < 3) return { ok: false, message: "Nhập lý do hoàn tác (ít nhất 3 ký tự)." };
+  const { error } = await supabase.rpc("reverse_wallet_allocation", {
+    p_allocation_id: id,
+    p_reason: reason,
+  });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin");
+  revalidatePath("/wallet");
+  revalidatePath("/account");
+  revalidatePath("/campaigns");
+  return { ok: true, message: "Đã hoàn tác phân bổ, hoàn số dư ví và chuyển giao dịch sang trạng thái hoàn tiền." };
+}

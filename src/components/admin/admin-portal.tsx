@@ -23,13 +23,14 @@ import {
   requestCampaignRevision,
   requestPersonalVerificationRevision,
   requestOrganizationRevision,
+  retryDonationReceipt,
   reviewAnonymousSosReport,
   setCorporateInquiryStatus,
   upsertPlatformReceivingAccount,
 } from "@/app/admin/actions";
 import { budgetLabel, interestLabel } from "@/lib/corporate/options";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
-import { AdminWalletPanel, type AdminWalletTopup } from "@/components/admin/admin-wallet-panel";
+import { AdminWalletPanel, type AdminWalletAllocation, type AdminWalletTopup } from "@/components/admin/admin-wallet-panel";
 import { AdminResourceWorkflow,type AdminResourceClaim, type AdminResourceNeed, type AdminResourceOffer } from "@/components/admin/admin-resource-workflow";
 import type { AdminPanelKey } from "@/lib/admin/panels";
 import { RescueAccountForm } from "@/components/admin/rescue-account-form";
@@ -98,6 +99,9 @@ type Disbursement = {
   post_audit_status: string;
   post_audited_at: string | null;
   post_audit_note: string | null;
+  explanation: string | null;
+  explanation_submitted_at: string | null;
+  published_at: string | null;
   campaigns: Related<{ title: string }>;
 };
 
@@ -250,8 +254,29 @@ type Transaction = {
   created_at: string;
   expires_at: string;
   completed_at: string | null;
+  receipt_pdf_hash: string | null;
+  receipt_email_status: string;
+  receipt_email_attempts: number;
+  receipt_email_last_error: string | null;
   campaigns: Related<{ title: string; slug: string }>;
 };
+
+function ReceiptDelivery({ transaction, onSent }: { transaction: Transaction; onSent: () => void }) {
+  if (transaction.status !== "completed") return null;
+  const sent = transaction.receipt_email_status === "sent";
+  return <div className="mt-1">
+    <span className={`text-[11px] font-bold ${sent ? "text-lua" : "text-son"}`}>
+      {sent ? "✓ PDF đã gửi" : `Email biên nhận ${transaction.receipt_email_status === "sending" ? "đang gửi" : "gửi lỗi"}`}
+    </span>
+    {transaction.receipt_pdf_hash ? <div className="max-w-[170px] truncate font-mono text-[9px] text-inkSoft" title={transaction.receipt_pdf_hash}>SHA-256: {transaction.receipt_pdf_hash}</div> : null}
+    {!sent && transaction.receipt_email_status !== "sending" ? <form action={async () => {
+      const result = await retryDonationReceipt(transaction.id);
+      window.alert(result.message);
+      if (result.ok) onSent();
+    }}><button className="mt-1 rounded-[4px] bg-sky/10 px-2 py-1 text-[10px] font-bold text-sky">Gửi lại PDF</button></form> : null}
+    {transaction.receipt_email_last_error ? <div className="mt-1 max-w-[220px] text-[10px] text-son">{transaction.receipt_email_last_error}</div> : null}
+  </div>;
+}
 
 type CorporateInquiry = {
   id: string;
@@ -337,6 +362,7 @@ function CampaignHistory({ campaign }: { campaign: Campaign }) {
       <Link href={`/campaign-management/${campaign.id}`} className="inline-flex rounded-[4px] border border-sky px-2.5 py-1 text-xs font-bold text-sky hover:bg-sky hover:text-white">
         Quản lý nội dung & Viral Kit
       </Link>
+      {['active', 'closed'].includes(campaign.status) ? <Link href={`/campaign-closure/${campaign.id}`} className="ml-2 inline-flex rounded-[4px] border border-son px-2.5 py-1 text-xs font-bold text-son hover:bg-son hover:text-white">Dashboard tất toán</Link> : null}
       <details className="text-xs">
       <summary className="cursor-pointer font-bold text-sky">Lịch sử trạng thái ({events.length})</summary>
       <ol className="mt-2 space-y-2 border-l border-line pl-3">
@@ -423,7 +449,7 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
   );
 }
 
-export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, walletTopups = [], initialPanel, sosAwaitingClosure = 0 }: { walletTopups?: AdminWalletTopup[]; initialPanel?: Panel; sosAwaitingClosure?: number; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
+export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, walletTopups = [], walletAllocations = [], initialPanel, sosAwaitingClosure = 0 }: { walletTopups?: AdminWalletTopup[]; walletAllocations?: AdminWalletAllocation[]; initialPanel?: Panel; sosAwaitingClosure?: number; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>(initialPanel ?? "overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
@@ -595,7 +621,7 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
                 </form>
               </div>
             </div>)}
-          </div> : <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[860px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Mã giao dịch</th><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Người ủng hộ</th><th className="px-3 py-2.5">Xử lý lúc</th><th className="px-3 py-2.5">Trạng thái</th></tr></thead><tbody>{visibleTransactions.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-inkSoft">Chưa có giao dịch nào được xử lý.</td></tr> : visibleTransactions.map((tx) => <tr key={tx.id} className="border-t border-line align-top"><td className="px-3 py-2.5 font-mono text-xs text-chamDeep">{tx.tx_ref}</td><td className="px-3 py-2.5 text-inkMid">{firstRelated(tx.campaigns)?.title ?? "—"}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{amount(tx.amount_vnd)}</td><td className="px-3 py-2.5 text-inkMid">{tx.donor_name || "Ẩn danh"}<div className="text-xs text-inkSoft">{tx.receipt_email}</div></td><td className="px-3 py-2.5 text-xs text-inkSoft">{fmtDate(tx.completed_at ?? tx.created_at)}{tx.failure_reason ? <div className="mt-0.5 text-son">Lý do: {tx.failure_reason}</div> : null}</td><td className="px-3 py-2.5"><Pill status={tx.status} /></td></tr>)}</tbody></table></div>}
+          </div> : <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[920px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Mã giao dịch</th><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Người ủng hộ</th><th className="px-3 py-2.5">Xử lý lúc</th><th className="px-3 py-2.5">Trạng thái / biên nhận</th></tr></thead><tbody>{visibleTransactions.length === 0 ? <tr><td colSpan={6} className="px-3 py-8 text-center text-inkSoft">Chưa có giao dịch nào được xử lý.</td></tr> : visibleTransactions.map((tx) => <tr key={tx.id} className="border-t border-line align-top"><td className="px-3 py-2.5 font-mono text-xs text-chamDeep">{tx.tx_ref}</td><td className="px-3 py-2.5 text-inkMid">{firstRelated(tx.campaigns)?.title ?? "—"}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{amount(tx.amount_vnd)}</td><td className="px-3 py-2.5 text-inkMid">{tx.donor_name || "Ẩn danh"}<div className="text-xs text-inkSoft">{tx.receipt_email}</div></td><td className="px-3 py-2.5 text-xs text-inkSoft">{fmtDate(tx.completed_at ?? tx.created_at)}{tx.failure_reason ? <div className="mt-0.5 text-son">Lý do: {tx.failure_reason}</div> : null}</td><td className="px-3 py-2.5"><Pill status={tx.status} /><ReceiptDelivery transaction={tx} onSent={() => router.refresh()} /></td></tr>)}</tbody></table></div>}
         </section> : null}
 
         {panel === "corporate" ? <section>
@@ -605,10 +631,10 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
 
         {panel === "disbursement" ? <section>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h1 className="font-serif text-[21px] font-medium text-chamDeep">Hậu kiểm bằng chứng giải ngân</h1><div className="flex gap-1.5"><button type="button" onClick={() => setAuditFilter("pending")} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${auditFilter === "pending" ? "border-son text-son" : "border-lineStrong text-inkMid"}`}>Chờ hậu kiểm ({pendingDisbursements.length})</button><button type="button" onClick={() => setAuditFilter("reviewed")} className={`rounded-full border px-3 py-1.5 text-xs font-bold ${auditFilter === "reviewed" ? "border-son text-son" : "border-lineStrong text-inkMid"}`}>Đã xử lý ({auditedDisbursements.length})</button></div></div>
-          {auditFilter === "pending" ? <div className="space-y-4">{visibleDisbursements.length === 0 ? <div className="rounded-[8px] border border-line bg-white px-4 py-8 text-center text-sm text-inkSoft">Không có hồ sơ nào đang chờ hậu kiểm.</div> : null}{visibleDisbursements.map((disbursement) => <div key={disbursement.id} className="rounded-[8px] border border-line bg-white p-4"><div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><div className="font-bold text-chamDeep">{firstRelated(disbursement.campaigns)?.title ?? "—"}</div><div className="mt-1 font-mono font-bold text-son">{amount(disbursement.amount)}</div></div><div className="text-xs text-inkSoft">Đại diện approval: {fmtDate(disbursement.representative_approved_at)}</div></div><div className="mb-4 text-sm text-inkMid">{disbursement.description}</div><div className="mb-3 text-sm font-bold text-chamDeep">Chữ ký người đại diện & hậu kiểm</div><AuditTimeline disbursement={disbursement} /><div className="mt-3 flex flex-wrap items-center gap-2"><span className="mr-2 text-xs text-inkSoft">{disbursement.evidence_paths.length} tệp bằng chứng đã cung cấp</span><form className="flex flex-wrap items-center gap-2"><input name="note" placeholder="Ghi chú hậu kiểm" className="w-48 rounded-[4px] border border-line px-2 py-1.5 text-xs outline-none focus:border-son" /><button formAction={postAuditDisbursement.bind(null, disbursement.id, "valid")} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">✅ Hậu kiểm hợp lệ</button><button formAction={postAuditDisbursement.bind(null, disbursement.id, "needs_explanation")} className="rounded-[4px] bg-sky/15 px-3 py-1.5 text-xs font-bold text-sky">Yêu cầu giải trình</button><button formAction={postAuditDisbursement.bind(null, disbursement.id, "violation")} className="rounded-[4px] bg-son/15 px-3 py-1.5 text-xs font-bold text-son">Đánh dấu vi phạm</button></form></div><div className="mt-3 rounded-[4px] bg-nghe/10 px-3 py-2 text-xs text-ngheDeep">🔒 Tài liệu do người đại diện cung cấp; Admin chỉ thực hiện hậu kiểm và ghi nhận kết quả.</div></div>)}</div> : <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[700px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Ngày</th><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Bằng chứng</th><th className="px-3 py-2.5">Trạng thái</th></tr></thead><tbody>{visibleDisbursements.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-inkSoft">Chưa có hồ sơ nào được hậu kiểm.</td></tr> : visibleDisbursements.map((disbursement) => <tr key={disbursement.id} className="border-t border-line"><td className="px-3 py-2.5 text-xs text-inkSoft">{fmtDate(disbursement.post_audited_at)}</td><td className="px-3 py-2.5 font-semibold text-chamDeep">{firstRelated(disbursement.campaigns)?.title ?? "—"}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{amount(disbursement.amount)}</td><td className="px-3 py-2.5 text-xs font-bold text-lua">✓ {disbursement.evidence_paths.length} tệp</td><td className="px-3 py-2.5"><Pill status={disbursement.post_audit_status} /></td></tr>)}</tbody></table></div>}
+          {auditFilter === "pending" ? <div className="space-y-4">{visibleDisbursements.length === 0 ? <div className="rounded-[8px] border border-line bg-white px-4 py-8 text-center text-sm text-inkSoft">Không có hồ sơ nào đang chờ hậu kiểm.</div> : null}{visibleDisbursements.map((disbursement) => <div key={disbursement.id} className="rounded-[8px] border border-line bg-white p-4"><div className="mb-3 flex flex-wrap items-start justify-between gap-3"><div><div className="font-bold text-chamDeep">{firstRelated(disbursement.campaigns)?.title ?? "—"}</div><div className="mt-1 font-mono font-bold text-son">{amount(disbursement.amount)}</div></div><div className="text-xs text-inkSoft">Đại diện approval: {fmtDate(disbursement.representative_approved_at)}</div></div><div className="mb-3 text-sm text-inkMid">{disbursement.description}</div>{disbursement.explanation ? <div className="mb-3 rounded-[6px] bg-sky/10 px-3 py-2 text-xs text-sky"><strong>Giải trình bổ sung:</strong> {disbursement.explanation}</div> : null}<div className="mb-3 flex flex-wrap gap-2">{disbursement.evidence_paths.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer" className="rounded-full bg-paper px-2.5 py-1 text-xs font-bold text-sky hover:underline">Mở chứng từ {index + 1}</a>)}</div><div className="mb-3 text-sm font-bold text-chamDeep">Chữ ký người đại diện & hậu kiểm</div><AuditTimeline disbursement={disbursement} /><div className="mt-3 flex flex-wrap items-center gap-2"><span className="mr-2 text-xs text-inkSoft">{disbursement.evidence_paths.length} tệp bằng chứng đã cung cấp</span><form className="flex flex-wrap items-center gap-2"><input name="note" placeholder="Ghi chú hậu kiểm" className="w-48 rounded-[4px] border border-line px-2 py-1.5 text-xs outline-none focus:border-son" /><button formAction={postAuditDisbursement.bind(null, disbursement.id, "valid")} className="rounded-[4px] bg-lua px-3 py-1.5 text-xs font-bold text-white">✅ Hậu kiểm hợp lệ</button><button formAction={postAuditDisbursement.bind(null, disbursement.id, "needs_explanation")} className="rounded-[4px] bg-sky/15 px-3 py-1.5 text-xs font-bold text-sky">Yêu cầu giải trình</button><button formAction={postAuditDisbursement.bind(null, disbursement.id, "violation")} className="rounded-[4px] bg-son/15 px-3 py-1.5 text-xs font-bold text-son">Đánh dấu vi phạm</button></form></div><div className="mt-3 rounded-[4px] bg-nghe/10 px-3 py-2 text-xs text-ngheDeep">🔒 Tài liệu do người đại diện cung cấp; Admin chỉ thực hiện hậu kiểm và ghi nhận kết quả.</div></div>)}</div> : <div className="overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[700px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase tracking-[0.04em] text-inkMid"><tr><th className="px-3 py-2.5">Ngày</th><th className="px-3 py-2.5">Chiến dịch</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Bằng chứng</th><th className="px-3 py-2.5">Trạng thái</th></tr></thead><tbody>{visibleDisbursements.length === 0 ? <tr><td colSpan={5} className="px-3 py-8 text-center text-inkSoft">Chưa có hồ sơ nào được hậu kiểm.</td></tr> : visibleDisbursements.map((disbursement) => <tr key={disbursement.id} className="border-t border-line"><td className="px-3 py-2.5 text-xs text-inkSoft">{fmtDate(disbursement.post_audited_at)}</td><td className="px-3 py-2.5 font-semibold text-chamDeep">{firstRelated(disbursement.campaigns)?.title ?? "—"}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{amount(disbursement.amount)}</td><td className="px-3 py-2.5 text-xs font-bold text-lua">✓ {disbursement.evidence_paths.length} tệp</td><td className="px-3 py-2.5"><Pill status={disbursement.post_audit_status} /></td></tr>)}</tbody></table></div>}
         </section> : null}
 
-        {panel === "wallet" ? <AdminWalletPanel topups={walletTopups} /> : null}
+        {panel === "wallet" ? <AdminWalletPanel topups={walletTopups} allocations={walletAllocations} /> : null}
 
         {panel === "resources" ?<AdminResourceWorkflow needs={resourceNeeds} offers={resourceOffers} claims={resourceClaims} loadError={resourceLoadError} /> : null}
 

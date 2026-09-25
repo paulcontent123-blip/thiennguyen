@@ -6,7 +6,8 @@ import { PROVINCES } from "@/lib/geo/provinces";
 import { RESCUE_RESOURCE_TYPES } from "@/lib/rescue/resource-types";
 import { createRescueActivationToken } from "@/lib/rescue/activation-token";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { sendCampaignUpdateEmail, sendDonationConfirmedEmail, sendRescueInvitationEmail } from "@/lib/email/notifications";
+import { sendCampaignUpdateEmail, sendRescueInvitationEmail } from "@/lib/email/notifications";
+import { deliverDonationReceipt } from "@/lib/donations/receipt-delivery";
 import { createClient } from "@/lib/supabase/server";
 
 function assertMutationSucceeded(error: { message: string } | null, fallbackMessage: string) {
@@ -36,32 +37,35 @@ export async function confirmDonationReceived(id: string): Promise<DonationRecon
     .update({ status: "completed", completed_at: nowIso })
     .eq("id", id)
     .eq("status", "pending")
-    .select("tx_ref, amount_vnd, receipt_email, donor_name, campaigns(title, slug)")
+    .select("id, tx_ref, amount_vnd, receipt_email, donor_name, campaigns(title, slug)")
     .maybeSingle();
 
   if (error) return { ok: false, message: error.message };
   if (!data) return { ok: false, message: "Giao dịch không còn ở trạng thái chờ xác nhận." };
 
   const campaign = Array.isArray(data.campaigns) ? data.campaigns[0] : data.campaigns;
-  try {
-    await sendDonationConfirmedEmail({
-      to: data.receipt_email,
-      donorName: data.donor_name ?? undefined,
-      txRef: data.tx_ref,
-      campaignTitle: campaign?.title ?? "chiến dịch",
-      amount: Number(data.amount_vnd),
-      campaignUrl: campaign?.slug
-        ? `${(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")}/campaigns/${campaign.slug}`
-        : undefined,
-    });
-  } catch (emailError) {
-    console.error("Donation confirmation email failed", { txRef: data.tx_ref, emailError });
-  }
+  const receipt = await deliverDonationReceipt(data.id);
+  if (!receipt.ok) console.error("Donation receipt delivery failed", { txRef: data.tx_ref, error: receipt.message });
 
   revalidatePath("/admin");
   revalidatePath("/account");
   if (campaign?.slug) revalidatePath(`/campaigns/${campaign.slug}`);
-  return { ok: true, message: `Đã xác nhận giao dịch ${data.tx_ref}.` };
+  return {
+    ok: true,
+    message: receipt.ok
+      ? `Đã xác nhận giao dịch ${data.tx_ref} và gửi biên nhận PDF.`
+      : `Đã xác nhận giao dịch ${data.tx_ref}; email biên nhận sẽ được gửi lại sau.`,
+  };
+}
+
+export async function retryDonationReceipt(id: string): Promise<DonationReconciliationResult> {
+  await requireAdmin();
+  const result = await deliverDonationReceipt(id);
+  revalidatePath("/admin");
+  revalidatePath("/account");
+  return result.ok
+    ? { ok: true, message: "Đã gửi lại biên nhận PDF thành công." }
+    : { ok: false, message: result.message };
 }
 
 export async function markDonationNeedsReview(id: string, formData: FormData): Promise<DonationReconciliationResult> {
@@ -364,7 +368,7 @@ export async function closeCampaign(id: string) {
   const { supabase } = await requireAdmin();
   const { data, error } = await supabase
     .from("campaigns")
-    .update({ status: "closed" })
+    .update({ status: "closed", closed_at: new Date().toISOString() })
     .eq("id", id)
     .eq("status", "active")
     .select("id, title, organization_id, owner_type, owner_user_id")
@@ -374,6 +378,9 @@ export async function closeCampaign(id: string) {
   await notifyCampaignOwner(supabase, data, "closed", "Đã đóng");
   revalidatePath("/admin");
   revalidatePath("/organization");
+  revalidatePath(`/campaign-closure/${id}`);
+  revalidatePath("/reports");
+  revalidatePath("/transparency");
   revalidatePath("/");
 }
 
@@ -464,17 +471,28 @@ export async function postAuditDisbursement(id: string, result: "valid" | "needs
     throw new Error("Kết quả hậu kiểm không hợp lệ.");
   }
   const note = String(formData.get("note") ?? "").trim();
-  const { error } = await supabase
+  if (result !== "valid" && note.length < 3) throw new Error("Cần nhập lý do yêu cầu giải trình hoặc đánh dấu vi phạm.");
+  const now = new Date().toISOString();
+  const { data, error } = await supabase
     .from("disbursements")
     .update({
+      status: result === "valid" ? "published" : "representative_approved",
       post_audit_status: result,
       post_audited_by: user.id,
-      post_audited_at: new Date().toISOString(),
+      post_audited_at: now,
       post_audit_note: note || null,
+      published_at: result === "valid" ? now : null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("status", "representative_approved")
+    .eq("post_audit_status", "not_reviewed")
+    .select("campaign_id")
+    .maybeSingle();
   assertMutationSucceeded(error, "Không thể cập nhật kết quả hậu kiểm.");
+  if (!data) throw new Error("Hồ sơ không còn ở trạng thái chờ hậu kiểm.");
   revalidatePath("/admin");
+  revalidatePath(`/organization/campaigns/${data.campaign_id}`);
+  revalidatePath("/reports");
 }
 
 export async function approveRescueApplication(id: string) {

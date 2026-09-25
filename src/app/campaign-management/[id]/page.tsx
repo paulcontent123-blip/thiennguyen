@@ -80,7 +80,10 @@ export default async function CampaignManagementPage({ params }: { params: { id:
             <h1 className="mt-2 font-serif text-3xl font-semibold text-chamDeep">{campaign.title}</h1>
             <p className="mt-2 text-sm text-inkMid">{statusLabels[campaign.status] ?? campaign.status} · {role === "admin" ? "Admin đang quản trị" : "Bạn là chủ chiến dịch"}</p>
           </div>
-          {['approved', 'active', 'closed'].includes(campaign.status) ? <Link href={`/campaigns/${campaign.slug}`} className="rounded-full border border-lineStrong px-4 py-2 text-sm font-bold text-chamDeep hover:border-son hover:text-son">Xem trang công khai ↗</Link> : null}
+          <div className="flex flex-wrap gap-2">
+            {['active', 'closed'].includes(campaign.status) ? <Link href={`/campaign-closure/${campaign.id}`} className="rounded-full border border-son px-4 py-2 text-sm font-bold text-son hover:bg-son hover:text-white">Dashboard tất toán</Link> : null}
+            {['approved', 'active', 'closed'].includes(campaign.status) ? <Link href={`/campaigns/${campaign.slug}`} className="rounded-full border border-lineStrong px-4 py-2 text-sm font-bold text-chamDeep hover:border-son hover:text-son">Xem trang công khai ↗</Link> : null}
+          </div>
         </div>
 
         {role !== "admin" && ['pending_review', 'rejected'].includes(campaign.status) ? (

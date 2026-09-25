@@ -26,6 +26,8 @@ export type DonationReceipt = {
   accountName: string;
   transferDescription: string;
   receivedAmountVnd: number;
+  pdfHash: string | null;
+  emailStatus: string;
 };
 
 export type DonationHistoryItem = {

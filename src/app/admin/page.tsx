@@ -9,7 +9,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
   const initialPanel = isAdminPanelKey(requestedPanel) ? requestedPanel : undefined;
   const { supabase } = await requirePageRole(["admin"], "/admin");
 
-  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes, resourceNeedsRes, resourceOffersRes, resourceClaimsRes, walletTopupsRes, walletAllocationsRes, newsPostsRes, newsMediaRes] = await Promise.all([
+  const [campaignsRes, organizationsRes, personalProfilesRes, disbursementsRes, rescueApplicationsRes, rescueTeamsRes, rescueInvitationsRes, sosReportsRes, receivingAccountsRes, transactionsRes, corporateInquiriesRes, sosCompletedRes, resourceNeedsRes, resourceOffersRes, resourceClaimsRes, walletTopupsRes, walletAllocationsRes, newsPostsRes, newsMediaRes, vnpayNotesRes] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id, title, owner_type, owner_user_id, campaign_type, category, province, target_amount, status, review_note, submitted_at, reviewed_at, created_at, organizations(name), campaign_status_history(id, from_status, to_status, actor_name, actor_role, note, created_at)")
@@ -99,7 +99,21 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       .select("id, url, public_id, original_name, alt_text, width, height, created_at")
       .order("created_at", { ascending: false })
       .limit(100),
+    supabase
+      .from("vnpay_merchant_settlement_notes")
+      .select("environment, merchant_website, merchant_portal_url, settlement_bank_name, settlement_account_no, settlement_account_name, note, updated_at"),
   ]);
+
+  function maskSecret(value: string | undefined) {
+    if (!value) return null;
+    return value.length <= 4 ? "****" : `${value.slice(0, 2)}${"*".repeat(Math.max(4, value.length - 4))}${value.slice(-2)}`;
+  }
+  const vnpayGatewayInfo = {
+    configured: Boolean(process.env.VNPAY_TMN_CODE?.trim() && process.env.VNPAY_HASH_SECRET?.trim()),
+    tmnCodeMasked: maskSecret(process.env.VNPAY_TMN_CODE?.trim()),
+    paymentUrl: process.env.VNPAY_PAYMENT_URL?.trim() || "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+    notes: vnpayNotesRes.data ?? [],
+  };
 
   const relation = <T,>(value: T | T[] | null | undefined): T | null => Array.isArray(value) ? value[0] ?? null : value ?? null;
   const resourceNeeds: AdminResourceNeed[] = (resourceNeedsRes.data ?? []).map((row) => {
@@ -153,6 +167,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       rescueInvitations={rescueInvitationsRes.data ?? []}
       sosReports={sosReportsRes.data ?? []}
       receivingAccounts={receivingAccountsRes.data ?? []}
+      vnpayGatewayInfo={vnpayGatewayInfo}
       transactions={transactionsRes.data ?? []}
       corporateInquiries={corporateInquiriesRes.data ?? []}
       walletTopups={walletTopupsRes.data ?? []}

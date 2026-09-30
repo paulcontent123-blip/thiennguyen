@@ -152,6 +152,46 @@ export async function upsertPlatformReceivingAccount(formData: FormData): Promis
   return { ok: true, message: "Đã lưu tài khoản nhận tiền trung tâm." };
 }
 
+export type VnpayMerchantNoteResult = { ok: true; message: string } | { ok: false; message: string };
+
+// Ghi chú thủ công — hệ thống không có API để tự đọc tài khoản quyết toán thật từ VNPAY,
+// nên Admin tự ghi lại để nội bộ tra cứu. Không ảnh hưởng tới luồng thanh toán/IPN thật.
+export async function upsertVnpayMerchantNote(formData: FormData): Promise<VnpayMerchantNoteResult> {
+  const { supabase, user } = await requireAdmin();
+  const environment = String(formData.get("environment") ?? "sandbox").trim();
+  if (!["sandbox", "production"].includes(environment)) return { ok: false, message: "Môi trường không hợp lệ." };
+
+  const merchantWebsite = optionalText(formData, "merchantWebsite");
+  const merchantPortalUrl = optionalText(formData, "merchantPortalUrl") ?? (environment === "sandbox" ? "https://sandbox.vnpayment.vn/merchantadmin/" : "https://merchant.vnpay.vn/");
+  const settlementBankName = optionalText(formData, "settlementBankName");
+  const settlementAccountNo = optionalText(formData, "settlementAccountNo");
+  const settlementAccountName = optionalText(formData, "settlementAccountName");
+  const note = optionalText(formData, "note");
+  if (note && note.length > 1000) return { ok: false, message: "Ghi chú tối đa 1000 ký tự." };
+
+  const { error } = await supabase
+    .from("vnpay_merchant_settlement_notes")
+    .upsert(
+      {
+        environment,
+        merchant_website: merchantWebsite,
+        merchant_portal_url: merchantPortalUrl,
+        settlement_bank_name: settlementBankName,
+        settlement_account_no: settlementAccountNo,
+        settlement_account_name: settlementAccountName,
+        note,
+        updated_by: user.id,
+      },
+      { onConflict: "environment" },
+    );
+  if (error) {
+    console.error("Failed to save VNPAY merchant settlement note", error);
+    return { ok: false, message: "Không thể lưu ghi chú quyết toán VNPAY." };
+  }
+  revalidatePath("/admin");
+  return { ok: true, message: "Đã lưu ghi chú quyết toán VNPAY." };
+}
+
 type RescueInvitationDeletionRow = {
   id: string;
   application_id: string | null;

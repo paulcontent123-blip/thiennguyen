@@ -28,6 +28,7 @@ import {
   reviewAnonymousSosReport,
   setCorporateInquiryStatus,
   upsertPlatformReceivingAccount,
+  upsertVnpayMerchantNote,
 } from "@/app/admin/actions";
 import { budgetLabel, interestLabel } from "@/lib/corporate/options";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
@@ -242,6 +243,23 @@ type ReceivingAccount = {
   updated_at: string;
 };
 
+type VnpayMerchantNote = {
+  environment: "sandbox" | "production";
+  merchant_website: string | null;
+  merchant_portal_url: string;
+  settlement_bank_name: string | null;
+  settlement_account_no: string | null;
+  settlement_account_name: string | null;
+  note: string | null;
+  updated_at: string;
+};
+type VnpayGatewayInfo = {
+  configured: boolean;
+  tmnCodeMasked: string | null;
+  paymentUrl: string;
+  notes: VnpayMerchantNote[];
+};
+
 type Transaction = {
   id: string;
   tx_ref: string;
@@ -453,7 +471,7 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
   );
 }
 
-export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, newsPosts, newsMedia, newsEditorLoadError, walletTopups = [], walletAllocations = [], initialPanel, sosAwaitingClosure = 0 }: { walletTopups?: AdminWalletTopup[]; walletAllocations?: AdminWalletAllocation[]; initialPanel?: Panel; sosAwaitingClosure?: number; newsPosts: NewsPost[]; newsMedia: NewsMediaAsset[]; newsEditorLoadError: string | null; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
+export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, vnpayGatewayInfo, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, newsPosts, newsMedia, newsEditorLoadError, walletTopups = [], walletAllocations = [], initialPanel, sosAwaitingClosure = 0 }: { walletTopups?: AdminWalletTopup[]; walletAllocations?: AdminWalletAllocation[]; initialPanel?: Panel; sosAwaitingClosure?: number; newsPosts: NewsPost[]; newsMedia: NewsMediaAsset[]; newsEditorLoadError: string | null; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; vnpayGatewayInfo: VnpayGatewayInfo; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
   const router = useRouter();
   const [panel, setPanel] = useState<Panel>(initialPanel ?? "overview");
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
@@ -578,6 +596,57 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
                 {account ? <p className="mt-3 text-[11px] text-inkSoft">Cập nhật gần nhất: {fmtDate(account.updated_at)}</p> : null}
               </form>;
             })}
+          </div>
+
+          <div className="mt-8">
+            <h2 className="font-serif text-lg font-semibold text-chamDeep">Cổng thanh toán VNPAY</h2>
+            <p className="mt-1 max-w-3xl text-sm leading-6 text-inkMid">
+              Tiền qua VNPAY <strong>không</strong> đi qua các tài khoản khai báo ở trên. VNPAY tự quyết toán về tài khoản ngân hàng
+              đã khai báo lúc đăng ký merchant (TMN Code) — hệ thống này không có API để tự đọc tài khoản đó từ VNPAY.
+              Phần dưới chỉ là ghi chú thủ công để Admin tra cứu nội bộ, không ảnh hưởng tới luồng thanh toán hay đối soát IPN thật.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[8px] border border-line bg-white p-4">
+                <p className="text-[11px] font-bold uppercase text-inkSoft">Trạng thái cấu hình server</p>
+                <p className={`mt-1 text-sm font-bold ${vnpayGatewayInfo.configured ? "text-lua" : "text-son"}`}>{vnpayGatewayInfo.configured ? "Đã có TMN Code + Hash Secret" : "Chưa cấu hình (thiếu biến môi trường)"}</p>
+              </div>
+              <div className="rounded-[8px] border border-line bg-white p-4">
+                <p className="text-[11px] font-bold uppercase text-inkSoft">TMN Code hiện dùng</p>
+                <p className="mt-1 font-mono text-sm font-bold text-chamDeep">{vnpayGatewayInfo.tmnCodeMasked ?? "—"}</p>
+              </div>
+              <div className="rounded-[8px] border border-line bg-white p-4">
+                <p className="text-[11px] font-bold uppercase text-inkSoft">Cổng thanh toán</p>
+                <p className="mt-1 break-all text-xs font-semibold text-chamDeep">{vnpayGatewayInfo.paymentUrl}</p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-5 xl:grid-cols-2">
+              {(["sandbox", "production"] as const).map((environment) => {
+                const note = vnpayGatewayInfo.notes.find((item) => item.environment === environment) ?? null;
+                return <form key={environment} action={async (formData) => {
+                  const result = await upsertVnpayMerchantNote(formData);
+                  window.alert(result.message);
+                  if (result.ok) router.refresh();
+                }} className="rounded-[8px] border border-line bg-white p-5">
+                  <input type="hidden" name="environment" value={environment} />
+                  <h3 className="font-serif text-base font-semibold text-chamDeep">{environment === "sandbox" ? "Merchant Sandbox (test)" : "Merchant Production (thật)"}</h3>
+                  <p className="mt-1 text-xs leading-5 text-inkSoft">Điền đúng thông tin bạn đã khai báo lúc đăng ký merchant tại {environment === "sandbox" ? "sandbox.vnpayment.vn/devreg" : "cổng đăng ký merchant production của VNPAY"}.</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <label className="grid gap-1 text-xs font-bold text-chamDeep sm:col-span-2">Trang quản trị merchant<input name="merchantPortalUrl" type="url" defaultValue={note?.merchant_portal_url ?? (environment === "sandbox" ? "https://sandbox.vnpayment.vn/merchantadmin/" : "https://merchant.vnpay.vn/")} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                    <label className="grid gap-1 text-xs font-bold text-chamDeep sm:col-span-2">Website đã đăng ký<input name="merchantWebsite" defaultValue={note?.merchant_website ?? ""} placeholder="https://thiennguyen.com.vn" className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                    <label className="grid gap-1 text-xs font-bold text-chamDeep">Ngân hàng quyết toán (ghi chú)<input name="settlementBankName" defaultValue={note?.settlement_bank_name ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                    <label className="grid gap-1 text-xs font-bold text-chamDeep">Số tài khoản quyết toán (ghi chú)<input name="settlementAccountNo" defaultValue={note?.settlement_account_no ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                    <label className="grid gap-1 text-xs font-bold text-chamDeep sm:col-span-2">Tên chủ tài khoản quyết toán (ghi chú)<input name="settlementAccountName" defaultValue={note?.settlement_account_name ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                    <label className="grid gap-1 text-xs font-bold text-chamDeep sm:col-span-2">Ghi chú khác<textarea name="note" rows={2} defaultValue={note?.note ?? ""} className="rounded-[6px] border border-line px-3 py-2 font-normal" /></label>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <button className="button-primary">Lưu ghi chú</button>
+                    {note?.merchant_portal_url ? <a href={note.merchant_portal_url} target="_blank" rel="noreferrer" className="text-xs font-bold text-sky hover:underline">Mở trang quản trị VNPAY →</a> : null}
+                  </div>
+                  {note ? <p className="mt-3 text-[11px] text-inkSoft">Cập nhật gần nhất: {fmtDate(note.updated_at)}</p> : null}
+                </form>;
+              })}
+            </div>
           </div>
         </section> : null}
 

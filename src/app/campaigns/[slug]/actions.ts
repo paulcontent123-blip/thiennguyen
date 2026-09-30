@@ -1,12 +1,21 @@
 "use server";
 
+import { headers } from "next/headers";
 import { buildVietQrUrl } from "@/lib/campaigns/content";
 import {
   DONATION_MAX_AMOUNT,
   DONATION_MIN_AMOUNT,
   type DonationActionResult,
 } from "@/lib/donations/types";
+import { buildVnpayPaymentUrl, isVnpayConfigured } from "@/lib/payments/vnpay";
 import { createClient } from "@/lib/supabase/server";
+
+export type VnpayRedirectResult = { ok: true; redirectUrl: string } | { ok: false; message: string };
+
+function clientIp() {
+  const forwardedFor = headers().get("x-forwarded-for");
+  return forwardedFor?.split(",")[0]?.trim() || headers().get("x-real-ip") || "127.0.0.1";
+}
 
 type DonationIntentRow = {
   id: string;
@@ -105,4 +114,52 @@ export async function createDonationIntent(formData: FormData): Promise<Donation
       createdAt: row.created_at,
     },
   };
+}
+
+export async function createDonationIntentVnpay(formData: FormData): Promise<VnpayRedirectResult> {
+  if (!isVnpayConfigured()) {
+    return { ok: false, message: "VNPAY chưa được cấu hình (thiếu VNPAY_TMN_CODE/VNPAY_HASH_SECRET). Hãy dùng VietQR trong lúc chờ đăng ký merchant sandbox." };
+  }
+
+  const campaignId = String(formData.get("campaignId") ?? "").trim();
+  const campaignSlug = String(formData.get("campaignSlug") ?? "").trim();
+  const receiptEmail = String(formData.get("receiptEmail") ?? "").trim().toLowerCase();
+  const donorName = String(formData.get("donorName") ?? "").trim();
+  const amount = Number(String(formData.get("amountVnd") ?? "").replace(/[^0-9]/g, ""));
+
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(campaignId)) {
+    return { ok: false, message: "Mã chiến dịch không hợp lệ." };
+  }
+  if (!Number.isSafeInteger(amount) || amount < DONATION_MIN_AMOUNT || amount > DONATION_MAX_AMOUNT) {
+    return { ok: false, message: "Số tiền ủng hộ phải từ 10.000đ đến 10 tỷ đồng." };
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(receiptEmail) || receiptEmail.length > 254) {
+    return { ok: false, message: "Email nhận biên nhận không hợp lệ." };
+  }
+  if (donorName && (donorName.length < 2 || donorName.length > 120)) {
+    return { ok: false, message: "Tên người ủng hộ phải từ 2 đến 120 ký tự." };
+  }
+
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("create_donation_intent_vnpay", {
+    p_campaign_id: campaignId,
+    p_amount_vnd: amount,
+    p_receipt_email: receiptEmail,
+    p_donor_name: donorName || null,
+  });
+  if (error) {
+    console.error("Failed to create VNPAY donation intent", { code: error.code, message: error.message });
+    return { ok: false, message: donationErrorMessage(error.message) };
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as { tx_ref: string; amount_vnd: number | string } | null;
+  if (!row) return { ok: false, message: "Hệ thống không nhận được dữ liệu giao dịch vừa tạo." };
+
+  const redirectUrl = buildVnpayPaymentUrl({
+    txRef: row.tx_ref,
+    amountVnd: Number(row.amount_vnd),
+    orderInfo: `Ung ho chien dich ${campaignSlug} - ${row.tx_ref}`,
+    clientIp: clientIp(),
+    purpose: "donation",
+  });
+  return { ok: true, redirectUrl };
 }

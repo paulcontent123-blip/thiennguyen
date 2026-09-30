@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { createDonationIntent } from "@/app/campaigns/[slug]/actions";
+import { createDonationIntent, createDonationIntentVnpay } from "@/app/campaigns/[slug]/actions";
 import {
   DONATION_MAX_AMOUNT,
   DONATION_MIN_AMOUNT,
@@ -42,6 +42,8 @@ export function DonationDialog({
   const [error, setError] = useState<string | null>(null);
   const [intent, setIntent] = useState<DonationIntent | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [vnpayLoading, setVnpayLoading] = useState(false);
+  const [showVietQrFallback, setShowVietQrFallback] = useState(false);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -88,6 +90,27 @@ export function DonationDialog({
       setError("Không thể kết nối tới hệ thống tạo giao dịch. Vui lòng thử lại.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleVnpaySubmit(formData: FormData) {
+    setVnpayLoading(true);
+    setError(null);
+    formData.set("campaignId", campaignId);
+    formData.set("campaignSlug", campaignSlug);
+    formData.set("amountVnd", amount);
+
+    try {
+      const result = await createDonationIntentVnpay(formData);
+      if (!result.ok) {
+        setError(result.message);
+        setVnpayLoading(false);
+        return;
+      }
+      window.location.href = result.redirectUrl;
+    } catch {
+      setError("Không thể kết nối tới cổng VNPAY. Vui lòng thử lại hoặc dùng VietQR.");
+      setVnpayLoading(false);
     }
   }
 
@@ -204,10 +227,37 @@ export function DonationDialog({
                         </label>
                       </div>
 
-                      <button type="submit" disabled={loading || numericAmount < DONATION_MIN_AMOUNT || numericAmount > DONATION_MAX_AMOUNT} className="button-primary w-full disabled:cursor-wait disabled:opacity-50">
-                        {loading ? "Đang tạo giao dịch…" : "Tạo mã VietQR"}
+                      <button
+                        type="submit"
+                        formAction={handleVnpaySubmit}
+                        disabled={vnpayLoading || loading || numericAmount < DONATION_MIN_AMOUNT || numericAmount > DONATION_MAX_AMOUNT}
+                        className="button-primary w-full disabled:cursor-wait disabled:opacity-50"
+                      >
+                        {vnpayLoading ? "Đang chuyển tới VNPAY…" : "Thanh toán qua VNPAY →"}
                       </button>
-                      <p className="text-center text-[11px] leading-5 text-inkSoft">Hệ thống chỉ ghi nhận thành công sau khi webhook ngân hàng đối soát đúng tài khoản, số tiền và mã giao dịch.</p>
+                      <p className="text-center text-[11px] leading-5 text-inkSoft">Hệ thống ghi nhận tự động ngay khi VNPAY xác nhận đã thanh toán (IPN đã ký số).</p>
+
+                      <button
+                        type="button"
+                        onClick={() => setShowVietQrFallback((current) => !current)}
+                        className="w-full text-center text-xs font-semibold text-sky hover:underline"
+                      >
+                        {showVietQrFallback ? "Ẩn phương án chuyển khoản thủ công" : "VNPAY gặp sự cố? Dùng VietQR/chuyển khoản thủ công"}
+                      </button>
+
+                      {showVietQrFallback ? (
+                        <div className="rounded-[10px] border border-line bg-paper p-3">
+                          <button
+                            type="submit"
+                            formAction={handleSubmit}
+                            disabled={loading || vnpayLoading || numericAmount < DONATION_MIN_AMOUNT || numericAmount > DONATION_MAX_AMOUNT}
+                            className="button-secondary w-full disabled:cursor-wait disabled:opacity-50"
+                          >
+                            {loading ? "Đang tạo giao dịch…" : "Tạo mã VietQR (Admin đối soát thủ công)"}
+                          </button>
+                          <p className="mt-2 text-center text-[11px] leading-5 text-inkSoft">Giao dịch chỉ chuyển từ chờ sang thành công sau khi Admin đối soát khớp sao kê ngân hàng.</p>
+                        </div>
+                      ) : null}
                     </form>
                   </>
                 )}

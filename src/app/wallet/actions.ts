@@ -1,10 +1,19 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { buildVietQrUrl } from "@/lib/campaigns/content";
 import { requireActionRole } from "@/lib/auth/server";
 import { deliverDonationReceipt } from "@/lib/donations/receipt-delivery";
+import { buildVnpayPaymentUrl, isVnpayConfigured } from "@/lib/payments/vnpay";
 import { WALLET_MAX_TOPUP, WALLET_MIN_TOPUP, type WalletAllocationResult, type WalletTopupResult } from "@/lib/wallet/types";
+
+export type WalletVnpayRedirectResult = { ok: true; redirectUrl: string } | { ok: false; message: string };
+
+function clientIp() {
+  const forwardedFor = headers().get("x-forwarded-for");
+  return forwardedFor?.split(",")[0]?.trim() || headers().get("x-real-ip") || "127.0.0.1";
+}
 
 type TopupRow = {
   id: string;
@@ -114,4 +123,32 @@ export async function allocateWalletToCampaign(formData: FormData): Promise<Wall
       ? `Đã phân bổ thành công. Biên nhận PDF của giao dịch ${row.tx_ref} đã được gửi qua email.`
       : `Đã phân bổ thành công (${row.tx_ref}), nhưng email biên nhận đang chờ gửi lại.`,
   };
+}
+
+export async function createWalletTopupVnpay(formData: FormData): Promise<WalletVnpayRedirectResult> {
+  if (!isVnpayConfigured()) {
+    return { ok: false, message: "VNPAY chưa được cấu hình (thiếu VNPAY_TMN_CODE/VNPAY_HASH_SECRET). Hãy dùng chuyển khoản thủ công trong lúc chờ đăng ký merchant sandbox." };
+  }
+  const { supabase } = await requireActionRole(["donor", "org"]);
+  const amount = Number(String(formData.get("amountVnd") ?? "").replace(/[^0-9]/g, ""));
+  if (!Number.isSafeInteger(amount) || amount < WALLET_MIN_TOPUP || amount > WALLET_MAX_TOPUP) {
+    return { ok: false, message: "Số tiền nạp phải từ 10.000đ đến 10 tỷ đồng." };
+  }
+
+  const { data, error } = await supabase.rpc("create_wallet_topup_vnpay", { p_amount_vnd: amount });
+  if (error) {
+    console.error("Failed to create VNPAY wallet top-up", { code: error.code, message: error.message });
+    return { ok: false, message: walletErrorMessage(error.message) };
+  }
+  const row = (Array.isArray(data) ? data[0] : data) as { tx_ref: string; amount_vnd: number | string } | null;
+  if (!row) return { ok: false, message: "Hệ thống không nhận được yêu cầu nạp vừa tạo." };
+
+  const redirectUrl = buildVnpayPaymentUrl({
+    txRef: row.tx_ref,
+    amountVnd: Number(row.amount_vnd),
+    orderInfo: `Nap vi - ${row.tx_ref}`,
+    clientIp: clientIp(),
+    purpose: "wallet_topup",
+  });
+  return { ok: true, redirectUrl };
 }

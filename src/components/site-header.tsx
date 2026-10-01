@@ -39,7 +39,6 @@ export async function SiteHeader() {
     }
   }
   const roleLinks = [
-    ...(role && role !== "admin" ? [["Tin tức", "/news"]] : []),
     ...(role === "org" ? [["Quản lý tổ chức", "/organization"]] : []),
     ...(role === "donor" || role === "org" ? [["Ví của tôi", "/wallet"]] : []),
     ...(role === "donor" ? [["Chiến dịch cá nhân", "/personal-campaigns"]] : []),

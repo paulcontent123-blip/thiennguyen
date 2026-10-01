@@ -10,6 +10,7 @@ export type AdminWalletTopup = {
   tx_ref: string;
   amount_vnd: number | string;
   status: string;
+  payment_provider: "bank_transfer" | "vnpay" | string;
   transfer_description: string;
   receiving_account_name: string;
   receiving_account_no: string;
@@ -57,7 +58,8 @@ export function AdminWalletPanel({ topups, issues, allocations }: { topups: Admi
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState<WalletTopupReviewResult | null>(null);
-  const waiting = topups.filter((item) => item.status === "pending");
+  const waiting = topups.filter((item) => item.status === "pending" && item.payment_provider === "bank_transfer");
+  const awaitingVnpay = topups.filter((item) => item.status === "pending" && item.payment_provider === "vnpay");
   const processed = topups.filter((item) => item.status !== "pending").slice(0, 30);
   const openIssues = issues.filter((item) => item.status === "open");
   const resolvedIssues = issues.filter((item) => item.status === "resolved").slice(0, 20);
@@ -78,6 +80,21 @@ export function AdminWalletPanel({ topups, issues, allocations }: { topups: Admi
       <p className="mt-1 max-w-3xl text-sm leading-6 text-inkMid">Kiểm tra sao kê tài khoản nhận tiền, đối chiếu nội dung chuyển khoản (chứa mã VI-…) và số tiền rồi mới xác nhận. Xác nhận sẽ cộng số dư vào ví và không hoàn tác được.</p>
       {notice ? <p className={`mt-3 rounded-[8px] p-3 text-sm ${notice.ok ? "bg-lua/10 text-lua" : "bg-son/10 text-son"}`} role="status">{notice.message}</p> : null}
     </header>
+
+    <div className="space-y-3">
+      <h2 className="font-serif text-lg font-semibold text-chamDeep">VNPAY đang chờ thanh toán/IPN ({awaitingVnpay.length})</h2>
+      {awaitingVnpay.length === 0 ? <p className="rounded-[8px] border border-line bg-white px-4 py-5 text-center text-sm text-inkSoft">Không có lệnh VNPAY nào đang chờ.</p> : awaitingVnpay.map((item) => <article key={item.id} className="rounded-[8px] border border-sky/20 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div><strong className="text-chamDeep">{ownerName(item)}</strong><div className="mt-1 font-mono font-bold text-son">{money.format(Number(item.amount_vnd))}đ</div></div>
+          <span className="rounded-full bg-sky/10 px-2.5 py-1 text-[11px] font-bold text-sky">Chờ VNPAY xác nhận</span>
+        </div>
+        <div className="mt-3 grid gap-2 rounded-[6px] bg-paper p-3 text-xs sm:grid-cols-3">
+          <div><span className="text-inkSoft">Mã: </span><strong className="font-mono text-chamDeep">{item.tx_ref}</strong></div>
+          <div><span className="text-inkSoft">Tạo lúc: </span><strong className="text-chamDeep">{dateTime.format(new Date(item.created_at))}</strong></div>
+          <div className="text-inkSoft">Chỉ IPN VNPAY mới tự xác nhận và cộng tiền. Không đối soát/xác nhận thủ công ở mục này.</div>
+        </div>
+      </article>)}
+    </div>
 
     <div className="space-y-3">
       <h2 className="font-serif text-lg font-semibold text-chamDeep">Báo sự cố chuyển tiền ({openIssues.length} mới)</h2>

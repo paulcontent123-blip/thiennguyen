@@ -190,22 +190,59 @@ export async function createWalletTopupVnpay(formData: FormData): Promise<Wallet
     return { ok: false, message: "Số tiền nạp phải từ 10.000đ đến 10 tỷ đồng." };
   }
 
-  const { data, error } = await supabase.rpc("create_wallet_topup_vnpay", { p_amount_vnd: amount });
+  const ip = clientIp();
+  const { data, error } = await supabase.rpc("create_wallet_topup_vnpay", { p_amount_vnd: amount, p_client_ip: ip });
   if (error) {
     console.error("Failed to create VNPAY wallet top-up", { code: error.code, message: error.message });
     return { ok: false, message: walletErrorMessage(error.message) };
   }
-  const row = (Array.isArray(data) ? data[0] : data) as { tx_ref: string; amount_vnd: number | string } | null;
+  const row = (Array.isArray(data) ? data[0] : data) as { tx_ref: string; amount_vnd: number | string; created_at: string; expires_at: string; client_ip: string } | null;
   if (!row) return { ok: false, message: "Hệ thống không nhận được yêu cầu nạp vừa tạo." };
 
   const redirectUrl = buildVnpayPaymentUrl({
     txRef: row.tx_ref,
     amountVnd: Number(row.amount_vnd),
     orderInfo: `Nap vi - ${row.tx_ref}`,
-    clientIp: clientIp(),
+    clientIp: row.client_ip,
     purpose: "wallet_topup",
+    createdAt: row.created_at,
+    expiresAt: row.expires_at,
   });
   return { ok: true, redirectUrl };
+}
+
+export async function resumeWalletTopupVnpay(topupId: string): Promise<WalletVnpayRedirectResult> {
+  if (!isVnpayConfigured()) {
+    return { ok: false, message: "VNPAY chưa được cấu hình. Vui lòng liên hệ Admin." };
+  }
+  const { supabase } = await requireActionRole(["donor", "org"]);
+  const { data, error } = await supabase.rpc("create_or_resume_wallet_topup_vnpay_attempt", {
+    p_topup_id: topupId,
+    p_client_ip: clientIp(),
+  });
+  const row = (Array.isArray(data) ? data[0] : data) as { tx_ref: string; amount_vnd: number | string; created_at: string; expires_at: string; client_ip: string } | null;
+
+  if (error || !row) {
+    return { ok: false, message: "Phiên VNPAY đã thất bại, hết hạn hoặc được xử lý. Đang cập nhật trạng thái yêu cầu nạp ví." };
+  }
+
+  try {
+    return {
+      ok: true,
+      redirectUrl: buildVnpayPaymentUrl({
+        txRef: row.tx_ref,
+        amountVnd: Number(row.amount_vnd),
+        orderInfo: `Nap vi - ${row.tx_ref}`,
+        clientIp: row.client_ip,
+        purpose: "wallet_topup",
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+      }),
+    };
+  } catch (caughtError) {
+    console.error("Failed to resume VNPAY wallet top-up", { topupId, caughtError });
+    return { ok: false, message: "Không thể mở lại trang VNPAY lúc này. Vui lòng thử lại sau." };
+  }
 }
 
 export async function cancelWalletTopup(id: string): Promise<{ ok: boolean; message: string }> {
@@ -221,6 +258,20 @@ export async function cancelWalletTopup(id: string): Promise<{ ok: boolean; mess
   revalidatePath("/wallet");
   revalidatePath("/admin");
   return { ok: true, message: "Đã hủy lệnh nạp. Chỉ hủy khi bạn chưa chuyển tiền; nếu đã chuyển, hãy liên hệ Admin để đối soát thủ công." };
+}
+
+export async function deleteFailedWalletVnpayTopup(id: string): Promise<{ ok: boolean; message: string }> {
+  const { supabase } = await requireActionRole(["donor", "org"]);
+  const { error } = await supabase.rpc("delete_failed_wallet_vnpay_topup", { p_topup_id: id });
+  if (error) {
+    console.error("Failed to delete failed VNPAY wallet top-up", { code: error.code, message: error.message });
+    if (error.message.includes("WALLET_VNPAY_TOPUP_HAS_LEDGER")) {
+      return { ok: false, message: "Không thể xóa yêu cầu đã ghi vào sổ ví." };
+    }
+    return { ok: false, message: "Chỉ có thể xóa yêu cầu VNPAY thất bại của chính bạn." };
+  }
+  revalidatePath("/wallet");
+  return { ok: true, message: "Đã xóa yêu cầu nạp VNPAY thất bại." };
 }
 
 export async function submitWalletTopupIssue(input: {

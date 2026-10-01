@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
-import { allocateWalletToCampaign, cancelWalletTopup, createWalletTopup, createWalletTopupVnpay, submitWalletTopupIssue } from "@/app/wallet/actions";
+import { allocateWalletToCampaign, cancelWalletTopup, createWalletTopup, createWalletTopupVnpay, deleteFailedWalletVnpayTopup, resumeWalletTopupVnpay, submitWalletTopupIssue } from "@/app/wallet/actions";
 import {
   WALLET_MAX_TOPUP,
   WALLET_MIN_TOPUP,
@@ -20,6 +20,7 @@ const dateTime = new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyl
 const presets = [10_000, 50_000, 200_000, 500_000, 1_000_000, 2_000_000];
 const statusLabel = { pending: "Chờ Admin đối soát", completed: "Đã cộng vào ví", rejected: "Không được xác nhận", cancelled: "Đã hủy" } as const;
 const statusClass = { pending: "bg-nghe/15 text-ngheDeep", completed: "bg-lua/15 text-lua", rejected: "bg-son/10 text-son", cancelled: "bg-inkSoft/10 text-inkMid" } as const;
+const vnpayPendingClass = "bg-sky/10 text-sky";
 
 function WalletTopupIssueForm({ topupId }: { topupId: string }) {
   const [pending, startTransition] = useTransition();
@@ -71,6 +72,7 @@ export function WalletPanel({ balance, ledger, topups, allocations, campaigns, l
   const [confirmMethod, setConfirmMethod] = useState<"vnpay" | "bank" | null>(null);
   const [confirmationAmount, setConfirmationAmount] = useState("");
   const [issueTopupId, setIssueTopupId] = useState<string | null>(null);
+  const [resumingTopupId, setResumingTopupId] = useState<string | null>(null);
   const numericAmount = Number(amount || 0);
   const pendingTotal = topups.filter((item) => item.status === "pending").reduce((sum, item) => sum + item.amountVnd, 0);
 
@@ -143,6 +145,33 @@ export function WalletPanel({ balance, ledger, topups, allocations, campaigns, l
           router.refresh();
         }
       }).catch(() => setTopupActionNotice("Không thể hủy lệnh nạp. Vui lòng thử lại."));
+    });
+  }
+
+  function resumeVnpayTopup(id: string) {
+    setTopupActionNotice(null);
+    setResumingTopupId(id);
+    void resumeWalletTopupVnpay(id).then((result) => {
+      if (!result.ok) {
+        setTopupActionNotice(result.message);
+        setResumingTopupId(null);
+        router.refresh();
+        return;
+      }
+      window.location.assign(result.redirectUrl);
+    }).catch(() => {
+      setTopupActionNotice("Không thể mở lại trang thanh toán. Vui lòng tải lại trang và thử lại.");
+      setResumingTopupId(null);
+    });
+  }
+
+  function deleteFailedVnpayTopup(id: string) {
+    if (!window.confirm("Xóa yêu cầu nạp VNPAY thất bại này khỏi lịch sử? Thao tác này không xóa giao dịch khỏi hệ thống VNPAY.")) return;
+    startTransition(() => {
+      void deleteFailedWalletVnpayTopup(id).then((result) => {
+        setTopupActionNotice(result.message);
+        if (result.ok) router.refresh();
+      }).catch(() => setTopupActionNotice("Không thể xóa yêu cầu. Vui lòng tải lại trang và thử lại."));
     });
   }
   async function copy(label: string, value: string) {
@@ -287,7 +316,7 @@ export function WalletPanel({ balance, ledger, topups, allocations, campaigns, l
               <td className="py-2.5 pr-3 font-mono text-xs text-chamDeep">{item.txRef}</td>
               <td className="py-2.5 pr-3 font-mono font-bold text-son">{currency.format(item.amountVnd)}đ</td>
               <td className="py-2.5 pr-3 text-xs text-inkSoft">{dateTime.format(new Date(item.createdAt))}</td>
-              <td className="py-2.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClass[item.status]}`}>{statusLabel[item.status]}</span>{item.status === "rejected" && item.adminNote ? <div className="mt-1 text-xs text-son">Lý do: {item.adminNote}</div> : null}{item.status === "pending" && item.paymentProvider === "bank_transfer" ? <><button disabled={pending} type="button" onClick={() => cancelTopup(item.id)} className="mt-1 block text-xs font-semibold text-son underline disabled:opacity-50">Hủy lệnh (chỉ khi chưa chuyển tiền)</button><button type="button" onClick={() => setIssueTopupId(issueTopupId === item.id ? null : item.id)} className="mt-1 block text-xs font-semibold text-sky underline">Báo sự cố</button></> : null}</td>
+              <td className="py-2.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${item.status === "pending" && item.paymentProvider === "vnpay" ? vnpayPendingClass : statusClass[item.status]}`}>{item.status === "pending" && item.paymentProvider === "vnpay" ? "Chờ VNPAY xác nhận" : item.status === "rejected" && item.paymentProvider === "vnpay" ? "Thanh toán thất bại" : statusLabel[item.status]}</span>{item.status === "rejected" && item.adminNote ? <div className="mt-1 text-xs text-son">Lý do: {item.adminNote}</div> : null}{item.status === "pending" && item.paymentProvider === "vnpay" ? <button disabled={Boolean(resumingTopupId) || pending} type="button" onClick={() => resumeVnpayTopup(item.id)} className="mt-1 block text-xs font-semibold text-sky underline disabled:opacity-50">{resumingTopupId === item.id ? "Đang mở VNPAY…" : "Tiếp tục thanh toán VNPAY"}</button> : null}{item.status === "rejected" && item.paymentProvider === "vnpay" ? <button disabled={pending} type="button" onClick={() => deleteFailedVnpayTopup(item.id)} className="mt-1 block text-xs font-semibold text-son underline disabled:opacity-50">Xóa yêu cầu</button> : null}{item.status === "pending" && item.paymentProvider === "bank_transfer" ? <><button disabled={pending} type="button" onClick={() => cancelTopup(item.id)} className="mt-1 block text-xs font-semibold text-son underline disabled:opacity-50">Hủy lệnh (chỉ khi chưa chuyển tiền)</button><button type="button" onClick={() => setIssueTopupId(issueTopupId === item.id ? null : item.id)} className="mt-1 block text-xs font-semibold text-sky underline">Báo sự cố</button></> : null}</td>
             </tr>{issueTopupId === item.id ? <tr><td colSpan={4} className="border-b border-line p-2"><WalletTopupIssueForm topupId={item.id} /></td></tr> : null}</Fragment>)}</tbody></table></div>
         )}
       </section>

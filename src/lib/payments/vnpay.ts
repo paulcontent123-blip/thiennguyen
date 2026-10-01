@@ -61,6 +61,8 @@ export function buildVnpayPaymentUrl(input: {
   clientIp: string;
   purpose: VnpayPurpose;
   locale?: "vn" | "en";
+  createdAt?: string;
+  expiresAt?: string;
 }) {
   const { tmnCode, hashSecret, paymentUrl } = requireConfig();
   const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
@@ -79,10 +81,10 @@ export function buildVnpayPaymentUrl(input: {
     vnp_Amount: String(Math.round(input.amountVnd) * 100),
     vnp_ReturnUrl: `${appUrl}${returnPath}`,
     vnp_IpAddr: input.clientIp || "127.0.0.1",
-    vnp_CreateDate: vnpDateTime(new Date()),
+    vnp_CreateDate: vnpDateTime(input.createdAt ? new Date(input.createdAt) : new Date()),
     // Nhiều tài liệu/tài khoản merchant VNPAY hiện bắt buộc trường này; thiếu nó cũng có thể
     // bị từ chối với lỗi định dạng chung chung. Đặt hạn thanh toán 15 phút kể từ lúc tạo.
-    vnp_ExpireDate: vnpDateTime(new Date(Date.now() + 15 * 60 * 1000)),
+    vnp_ExpireDate: vnpDateTime(input.expiresAt ? new Date(input.expiresAt) : new Date(Date.now() + 15 * 60 * 1000)),
   };
   params.vnp_SecureHash = sign(params, hashSecret);
 

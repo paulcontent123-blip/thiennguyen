@@ -7,6 +7,9 @@ export const dynamic = "force-dynamic";
 
 export default async function WalletPage() {
   const { supabase, user } = await requirePageRole(["donor", "org"], "/wallet");
+  // Lượt VNPAY hết hạn được chuyển sang thất bại khi chủ ví mở trang; IPN thành công trễ vẫn được phép đối soát.
+  const { error: expiryError } = await supabase.rpc("expire_my_wallet_vnpay_topups");
+  if (expiryError) console.error("Could not expire wallet VNPAY attempts", expiryError.message);
   const [balanceResult, ledgerResult, topupResult, allocationResult, campaignsResult] = await Promise.all([
     supabase.from("wallet_accounts").select("available_balance_vnd").eq("user_id", user.id).maybeSingle(),
     supabase.from("wallet_ledger").select("id, entry_type, amount_vnd, campaign_id, transaction_id, note, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100),

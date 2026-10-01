@@ -82,7 +82,7 @@ export default async function AdminPage({ searchParams = {} }: { searchParams?: 
       .order("created_at", { ascending: false }),
     supabase
       .from("wallet_topups")
-      .select("id, user_id, tx_ref, amount_vnd, status, transfer_description, receiving_account_name, receiving_account_no, admin_note, created_at, completed_at, profiles!wallet_topups_user_id_fkey(full_name)")
+      .select("id, user_id, tx_ref, amount_vnd, status, payment_provider, transfer_description, receiving_account_name, receiving_account_no, admin_note, created_at, completed_at, profiles!wallet_topups_user_id_fkey(full_name)")
       .order("created_at", { ascending: false })
       .limit(200),
     supabase

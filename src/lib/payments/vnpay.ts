@@ -38,9 +38,16 @@ function sign(params: Record<string, string>, hashSecret: string) {
   return crypto.createHmac("sha512", hashSecret).update(Buffer.from(data, "utf-8")).digest("hex");
 }
 
+// VNPAY luôn tính giờ theo múi giờ Việt Nam (UTC+7), bất kể máy chủ chạy ở múi giờ nào
+// (Vercel chạy UTC+0). Nếu dùng date.getHours()/getMonth()... (giờ địa phương của tiến trình),
+// trên Vercel sẽ lệch 7 tiếng so với giờ VNPAY mong đợi, khiến hạn thanh toán bị coi là đã qua
+// gần như ngay khi vừa tạo. Vì vậy phải cộng offset vào epoch UTC rồi đọc lại bằng getUTC*.
+const VIETNAM_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
+
 function vnpDateTime(date: Date) {
+  const vietnamTime = new Date(date.getTime() + VIETNAM_UTC_OFFSET_MS);
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`;
+  return `${vietnamTime.getUTCFullYear()}${pad(vietnamTime.getUTCMonth() + 1)}${pad(vietnamTime.getUTCDate())}${pad(vietnamTime.getUTCHours())}${pad(vietnamTime.getUTCMinutes())}${pad(vietnamTime.getUTCSeconds())}`;
 }
 
 /**

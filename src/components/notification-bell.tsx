@@ -35,6 +35,7 @@ export function NotificationBell({ userId }: { userId: string }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
   const fetchNotifications = useCallback(async () => {
@@ -65,7 +66,14 @@ export function NotificationBell({ userId }: { userId: string }) {
   useEffect(() => {
     if (!open) return;
     const closeOnOutside = (event: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) setOpen(false);
+      const target = event.target as Node;
+      // Hộp danh sách được render qua createPortal vào document.body, nên nó KHÔNG nằm trong
+      // wrapperRef về mặt DOM dù về mặt hình ảnh thì có. Phải kiểm tra thêm panelRef, nếu không
+      // mọi cú bấm bên trong hộp (kể cả "Đánh dấu tất cả đã đọc") đều bị coi là bấm ra ngoài và
+      // đóng hộp trước khi sự kiện click kịp chạy.
+      if (wrapperRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
@@ -119,6 +127,7 @@ export function NotificationBell({ userId }: { userId: string }) {
       {open && mounted
         ? createPortal(
             <div
+              ref={panelRef}
               style={{
                 position: "fixed",
                 top: (wrapperRef.current?.getBoundingClientRect().bottom ?? 0) + 8,

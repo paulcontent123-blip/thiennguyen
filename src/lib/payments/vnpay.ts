@@ -17,11 +17,19 @@ function requireConfig() {
   return { tmnCode, hashSecret, paymentUrl };
 }
 
+// VNPAY ký (và tự xác minh lại) trên chuỗi đã percent-encode theo quy ước "khoảng trắng = +"
+// (giống PHP urlencode / querystring.stringify mặc định), KHÔNG phải %20 của encodeURIComponent thuần.
+// Phải dùng đúng một cách encode này cho cả chuỗi ký (sign) lẫn URL thật gửi đi — sai lệch giữa
+// hai chỗ là nguyên nhân phổ biến nhất gây lỗi "Invalid data format" (code 03) từ VNPAY.
+function vnpEncode(value: string) {
+  return encodeURIComponent(value).replace(/%20/g, "+");
+}
+
 function sortAndEncode(params: Record<string, string>) {
   return Object.keys(params)
     .filter((key) => params[key] !== undefined && params[key] !== null && params[key] !== "")
     .sort()
-    .map((key) => `${key}=${encodeURIComponent(params[key]).replace(/%20/g, "+")}`)
+    .map((key) => `${vnpEncode(key)}=${vnpEncode(params[key])}`)
     .join("&");
 }
 
@@ -65,12 +73,15 @@ export function buildVnpayPaymentUrl(input: {
     vnp_ReturnUrl: `${appUrl}${returnPath}`,
     vnp_IpAddr: input.clientIp || "127.0.0.1",
     vnp_CreateDate: vnpDateTime(new Date()),
+    // Nhiều tài liệu/tài khoản merchant VNPAY hiện bắt buộc trường này; thiếu nó cũng có thể
+    // bị từ chối với lỗi định dạng chung chung. Đặt hạn thanh toán 15 phút kể từ lúc tạo.
+    vnp_ExpireDate: vnpDateTime(new Date(Date.now() + 15 * 60 * 1000)),
   };
   params.vnp_SecureHash = sign(params, hashSecret);
 
   const query = Object.keys(params)
     .sort()
-    .map((key) => `${key}=${encodeURIComponent(params[key])}`)
+    .map((key) => `${vnpEncode(key)}=${vnpEncode(params[key])}`)
     .join("&");
   return `${paymentUrl}?${query}`;
 }

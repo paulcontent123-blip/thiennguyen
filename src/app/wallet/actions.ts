@@ -222,3 +222,53 @@ export async function cancelWalletTopup(id: string): Promise<{ ok: boolean; mess
   revalidatePath("/admin");
   return { ok: true, message: "Đã hủy lệnh nạp. Chỉ hủy khi bạn chưa chuyển tiền; nếu đã chuyển, hãy liên hệ Admin để đối soát thủ công." };
 }
+
+export async function submitWalletTopupIssue(input: {
+  topupId: string;
+  phone: string;
+  description: string;
+}): Promise<{ ok: boolean; message: string }> {
+  const { supabase, user } = await requireActionRole(["donor", "org"]);
+  const phone = input.phone.trim();
+  const description = input.description.trim();
+  if (!/^[+\d][\d\s().-]{6,28}$/.test(phone)) {
+    return { ok: false, message: "Vui lòng nhập số điện thoại hợp lệ để Admin liên hệ." };
+  }
+  if (description.length < 5 || description.length > 1000) {
+    return { ok: false, message: "Mô tả sự cố cần từ 5 đến 1.000 ký tự." };
+  }
+
+  const { data: topup, error: topupError } = await supabase
+    .from("wallet_topups")
+    .select("tx_ref")
+    .eq("id", input.topupId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (topupError || !topup) return { ok: false, message: "Không tìm thấy lệnh nạp của bạn." };
+
+  const { data, error } = await supabase.rpc("submit_wallet_topup_issue", {
+    p_topup_id: input.topupId,
+    p_contact_phone: phone,
+    p_description: description,
+  });
+  if (error) {
+    if (error.message.includes("WALLET_TOPUP_ISSUE_ALREADY_OPEN")) {
+      return { ok: false, message: "Báo cáo cho lệnh này đã được gửi và đang chờ Admin xử lý." };
+    }
+    if (error.message.includes("WALLET_TOPUP_ISSUE_TOPUP_NOT_FOUND")) {
+      return { ok: false, message: "Không tìm thấy lệnh chuyển khoản hợp lệ của bạn." };
+    }
+    console.error("Failed to submit wallet top-up issue", { code: error.code, message: error.message });
+    return { ok: false, message: "Chưa gửi được báo cáo. Vui lòng thử lại." };
+  }
+
+  await notifyAdmins({
+    category: "admin_alert",
+    title: `Báo sự cố chuyển tiền — ${topup.tx_ref}`,
+    body: `${phone}: ${description.slice(0, 140)}`,
+    link: "/admin?panel=wallet",
+  });
+  revalidatePath("/wallet");
+  revalidatePath("/admin");
+  return { ok: Boolean(data), message: "Đã gửi báo cáo cho Admin. Admin sẽ liên hệ bạn theo số điện thoại đã cung cấp." };
+}

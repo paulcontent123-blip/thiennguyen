@@ -2,9 +2,9 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { Fragment, useState, useTransition } from "react";
 import Link from "next/link";
-import { allocateWalletToCampaign, cancelWalletTopup, createWalletTopup, createWalletTopupVnpay } from "@/app/wallet/actions";
+import { allocateWalletToCampaign, cancelWalletTopup, createWalletTopup, createWalletTopupVnpay, submitWalletTopupIssue } from "@/app/wallet/actions";
 import {
   WALLET_MAX_TOPUP,
   WALLET_MIN_TOPUP,
@@ -20,6 +20,39 @@ const dateTime = new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyl
 const presets = [10_000, 50_000, 200_000, 500_000, 1_000_000, 2_000_000];
 const statusLabel = { pending: "Chờ Admin đối soát", completed: "Đã cộng vào ví", rejected: "Không được xác nhận", cancelled: "Đã hủy" } as const;
 const statusClass = { pending: "bg-nghe/15 text-ngheDeep", completed: "bg-lua/15 text-lua", rejected: "bg-son/10 text-son", cancelled: "bg-inkSoft/10 text-inkMid" } as const;
+
+function WalletTopupIssueForm({ topupId }: { topupId: string }) {
+  const [pending, startTransition] = useTransition();
+  const [notice, setNotice] = useState<{ ok: boolean; message: string } | null>(null);
+
+  function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    startTransition(() => {
+      void submitWalletTopupIssue({
+        topupId,
+        phone: String(data.get("phone") ?? ""),
+        description: String(data.get("description") ?? ""),
+      }).then((result) => {
+        setNotice(result);
+        if (result.ok) form.reset();
+      }).catch(() => setNotice({ ok: false, message: "Chưa gửi được báo cáo. Vui lòng thử lại." }));
+    });
+  }
+
+  return <form onSubmit={submit} className="mt-3 grid gap-3 rounded-[8px] border border-nghe/25 bg-white p-3">
+    <div><strong className="text-sm text-chamDeep">Báo sự cố chuyển tiền</strong><p className="mt-1 text-xs leading-5 text-inkSoft">Báo chuyển sai số tiền/tài khoản hoặc vấn đề khác. Admin sẽ liên hệ để xử lý; báo cáo không tự cộng hay hoàn tiền.</p></div>
+    <label className="grid gap-1 text-xs font-semibold text-chamDeep">Số điện thoại liên hệ
+      <input name="phone" type="tel" required minLength={8} maxLength={30} placeholder="Ví dụ: 09xxxxxxxx" className="rounded-[6px] border border-line px-3 py-2 text-sm font-normal outline-none focus:border-son" />
+    </label>
+    <label className="grid gap-1 text-xs font-semibold text-chamDeep">Mô tả ngắn sự cố
+      <textarea name="description" required minLength={5} maxLength={1000} rows={3} placeholder="Ví dụ: Tôi đã chuyển 1.000.000đ nhưng nhập nhầm số tiền trên lệnh…" className="resize-y rounded-[6px] border border-line px-3 py-2 text-sm font-normal outline-none focus:border-son" />
+    </label>
+    {notice ? <p role="status" className={`rounded-[6px] p-2 text-xs ${notice.ok ? "bg-lua/10 text-lua" : "bg-son/10 text-son"}`}>{notice.message}</p> : null}
+    <button disabled={pending} className="button-secondary justify-self-start disabled:opacity-50">{pending ? "Đang gửi…" : "Gửi cho Admin"}</button>
+  </form>;
+}
 
 export function WalletPanel({ balance, ledger, topups, allocations, campaigns, loadError }: { balance: number; ledger: WalletLedgerItem[]; topups: WalletTopupItem[]; allocations: WalletAllocationItem[]; campaigns: WalletCampaign[]; loadError: string | null }) {
   const router = useRouter();
@@ -37,6 +70,7 @@ export function WalletPanel({ balance, ledger, topups, allocations, campaigns, l
   const [showManualTopup, setShowManualTopup] = useState(false);
   const [confirmMethod, setConfirmMethod] = useState<"vnpay" | "bank" | null>(null);
   const [confirmationAmount, setConfirmationAmount] = useState("");
+  const [issueTopupId, setIssueTopupId] = useState<string | null>(null);
   const numericAmount = Number(amount || 0);
   const pendingTotal = topups.filter((item) => item.status === "pending").reduce((sum, item) => sum + item.amountVnd, 0);
 
@@ -166,6 +200,7 @@ export function WalletPanel({ balance, ledger, topups, allocations, campaigns, l
                 ))}
               </dl>
               <p className="mt-3 rounded-[8px] bg-ngheXsoft p-3 text-xs leading-5 text-ngheDeep">Giữ nguyên số tiền và nội dung chuyển khoản. Mã <strong className="font-mono">{intent.txRef}</strong> đang chờ Admin đối soát; ví chưa được cộng tiền.</p>
+              <WalletTopupIssueForm topupId={intent.id} />
               <button type="button" onClick={() => setIntent(null)} className="button-secondary mt-4 w-full">Tạo yêu cầu nạp khác</button>
             </div>
           ) : (
@@ -248,12 +283,12 @@ export function WalletPanel({ balance, ledger, topups, allocations, campaigns, l
         {topupActionNotice ? <p role="status" className="mt-3 rounded-[8px] bg-ngheXsoft p-3 text-sm leading-5 text-ngheDeep">{topupActionNotice}</p> : null}
         {topups.length === 0 ? <p className="mt-3 text-sm text-inkSoft">Bạn chưa có yêu cầu nạp nào.</p> : (
           <div className="mt-3 overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="text-xs uppercase text-inkMid"><tr><th className="py-2 pr-3">Mã</th><th className="py-2 pr-3">Số tiền</th><th className="py-2 pr-3">Tạo lúc</th><th className="py-2">Trạng thái</th></tr></thead>
-            <tbody>{topups.map((item) => <tr key={item.id} className="border-t border-line align-top">
+            <tbody>{topups.map((item) => <Fragment key={item.id}><tr className="border-t border-line align-top">
               <td className="py-2.5 pr-3 font-mono text-xs text-chamDeep">{item.txRef}</td>
               <td className="py-2.5 pr-3 font-mono font-bold text-son">{currency.format(item.amountVnd)}đ</td>
               <td className="py-2.5 pr-3 text-xs text-inkSoft">{dateTime.format(new Date(item.createdAt))}</td>
-              <td className="py-2.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClass[item.status]}`}>{statusLabel[item.status]}</span>{item.status === "rejected" && item.adminNote ? <div className="mt-1 text-xs text-son">Lý do: {item.adminNote}</div> : null}{item.status === "pending" && item.paymentProvider === "bank_transfer" ? <button disabled={pending} type="button" onClick={() => cancelTopup(item.id)} className="mt-1 block text-xs font-semibold text-son underline disabled:opacity-50">Hủy lệnh (chỉ khi chưa chuyển tiền)</button> : null}</td>
-            </tr>)}</tbody></table></div>
+              <td className="py-2.5"><span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-bold ${statusClass[item.status]}`}>{statusLabel[item.status]}</span>{item.status === "rejected" && item.adminNote ? <div className="mt-1 text-xs text-son">Lý do: {item.adminNote}</div> : null}{item.status === "pending" && item.paymentProvider === "bank_transfer" ? <><button disabled={pending} type="button" onClick={() => cancelTopup(item.id)} className="mt-1 block text-xs font-semibold text-son underline disabled:opacity-50">Hủy lệnh (chỉ khi chưa chuyển tiền)</button><button type="button" onClick={() => setIssueTopupId(issueTopupId === item.id ? null : item.id)} className="mt-1 block text-xs font-semibold text-sky underline">Báo sự cố</button></> : null}</td>
+            </tr>{issueTopupId === item.id ? <tr><td colSpan={4} className="border-b border-line p-2"><WalletTopupIssueForm topupId={item.id} /></td></tr> : null}</Fragment>)}</tbody></table></div>
         )}
       </section>
 

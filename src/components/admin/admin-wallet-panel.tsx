@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { confirmWalletTopup, rejectWalletTopup, reverseWalletAllocation, type WalletTopupReviewResult } from "@/app/admin/wallet-actions";
+import { confirmWalletTopup, rejectWalletTopup, resolveWalletTopupIssue, reverseWalletAllocation, type WalletTopupReviewResult } from "@/app/admin/wallet-actions";
 
 export type AdminWalletTopup = {
   id: string;
@@ -31,6 +31,19 @@ export type AdminWalletAllocation = {
   transactions: { tx_ref: string } | { tx_ref: string }[] | null;
 };
 
+export type AdminWalletTopupIssue = {
+  id: string;
+  topup_id: string;
+  user_id: string;
+  contact_phone: string;
+  description: string;
+  status: "open" | "resolved";
+  admin_note: string | null;
+  created_at: string;
+  handled_at: string | null;
+  wallet_topups: { tx_ref: string; amount_vnd: number | string } | { tx_ref: string; amount_vnd: number | string }[] | null;
+};
+
 const money = new Intl.NumberFormat("vi-VN");
 const dateTime = new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" });
 const statusLabel: Record<string, string> = { pending: "Chờ đối soát", completed: "Đã cộng ví", rejected: "Không xác nhận", cancelled: "Người dùng đã hủy" };
@@ -40,12 +53,14 @@ function ownerName(item: AdminWalletTopup) {
   return profile?.full_name || `Người dùng ${item.user_id.slice(0, 8)}`;
 }
 
-export function AdminWalletPanel({ topups, allocations }: { topups: AdminWalletTopup[]; allocations: AdminWalletAllocation[] }) {
+export function AdminWalletPanel({ topups, issues, allocations }: { topups: AdminWalletTopup[]; issues: AdminWalletTopupIssue[]; allocations: AdminWalletAllocation[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [notice, setNotice] = useState<WalletTopupReviewResult | null>(null);
   const waiting = topups.filter((item) => item.status === "pending");
   const processed = topups.filter((item) => item.status !== "pending").slice(0, 30);
+  const openIssues = issues.filter((item) => item.status === "open");
+  const resolvedIssues = issues.filter((item) => item.status === "resolved").slice(0, 20);
 
   function run(action: () => Promise<WalletTopupReviewResult>) {
     setNotice(null);
@@ -63,6 +78,28 @@ export function AdminWalletPanel({ topups, allocations }: { topups: AdminWalletT
       <p className="mt-1 max-w-3xl text-sm leading-6 text-inkMid">Kiểm tra sao kê tài khoản nhận tiền, đối chiếu nội dung chuyển khoản (chứa mã VI-…) và số tiền rồi mới xác nhận. Xác nhận sẽ cộng số dư vào ví và không hoàn tác được.</p>
       {notice ? <p className={`mt-3 rounded-[8px] p-3 text-sm ${notice.ok ? "bg-lua/10 text-lua" : "bg-son/10 text-son"}`} role="status">{notice.message}</p> : null}
     </header>
+
+    <div className="space-y-3">
+      <h2 className="font-serif text-lg font-semibold text-chamDeep">Báo sự cố chuyển tiền ({openIssues.length} mới)</h2>
+      {openIssues.length === 0 ? <p className="rounded-[8px] border border-line bg-white px-4 py-6 text-center text-sm text-inkSoft">Không có báo cáo mới.</p> : openIssues.map((issue) => {
+        const topup = Array.isArray(issue.wallet_topups) ? issue.wallet_topups[0] : issue.wallet_topups;
+        return <article key={issue.id} className="rounded-[8px] border border-nghe/30 bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><strong className="font-mono text-sm text-chamDeep">{topup?.tx_ref ?? issue.topup_id}</strong><div className="mt-1 text-xs text-inkSoft">{topup ? `${money.format(Number(topup.amount_vnd))}đ · ` : ""}Gửi lúc {dateTime.format(new Date(issue.created_at))}</div></div>
+            <a href={`tel:${issue.contact_phone}`} className="rounded-[4px] bg-sky/10 px-3 py-1.5 text-sm font-bold text-sky">Gọi {issue.contact_phone}</a>
+          </div>
+          <p className="mt-3 whitespace-pre-wrap rounded-[6px] bg-paper p-3 text-sm leading-6 text-inkMid">{issue.description}</p>
+          <button disabled={pending} type="button" onClick={() => run(() => resolveWalletTopupIssue(issue.id))} className="mt-3 rounded-[4px] bg-lua/10 px-3 py-1.5 text-xs font-bold text-lua disabled:opacity-50">Đánh dấu đã xử lý</button>
+        </article>;
+      })}
+      {resolvedIssues.length ? <details className="rounded-[8px] border border-line bg-white p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-inkMid">Đã xử lý gần đây ({resolvedIssues.length})</summary>
+        <div className="mt-3 space-y-2">{resolvedIssues.map((issue) => {
+          const topup = Array.isArray(issue.wallet_topups) ? issue.wallet_topups[0] : issue.wallet_topups;
+          return <div key={issue.id} className="rounded-[6px] bg-paper p-3 text-sm"><div className="flex flex-wrap justify-between gap-2"><strong className="font-mono text-chamDeep">{topup?.tx_ref ?? issue.topup_id}</strong><a href={`tel:${issue.contact_phone}`} className="text-sky hover:underline">{issue.contact_phone}</a></div><p className="mt-1 whitespace-pre-wrap text-inkMid">{issue.description}</p></div>;
+        })}</div>
+      </details> : null}
+    </div>
 
     <div className="space-y-3">
       <h2 className="font-serif text-lg font-semibold text-chamDeep">Chờ đối soát ({waiting.length})</h2>

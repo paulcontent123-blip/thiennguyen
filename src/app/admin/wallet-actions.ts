@@ -67,6 +67,21 @@ export async function rejectWalletTopup(id: string, formData: FormData): Promise
   return { ok: true, message: `Đã từ chối ${data.tx_ref}.` };
 }
 
+export async function resolveWalletTopupIssue(id: string): Promise<WalletTopupReviewResult> {
+  const { supabase, user } = await requireActionRole(["admin"]);
+  const { data, error } = await supabase
+    .from("wallet_topup_issue_reports")
+    .update({ status: "resolved", handled_by: user.id, handled_at: new Date().toISOString() })
+    .eq("id", id)
+    .eq("status", "open")
+    .select("id")
+    .maybeSingle();
+  if (error) return { ok: false, message: "Không thể cập nhật báo cáo sự cố." };
+  if (!data) return { ok: false, message: "Báo cáo này đã được xử lý hoặc không còn tồn tại." };
+  revalidatePath("/admin");
+  return { ok: true, message: "Đã đánh dấu báo cáo là xử lý xong." };
+}
+
 export async function reverseWalletAllocation(id: string, formData: FormData): Promise<WalletTopupReviewResult> {
   const { supabase } = await requireActionRole(["admin"]);
   const reason = String(formData.get("reason") ?? "").trim();

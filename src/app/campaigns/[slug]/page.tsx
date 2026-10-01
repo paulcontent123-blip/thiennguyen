@@ -48,25 +48,23 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   if (!campaign) notFound();
 
   const isPersonalCampaign = campaign.owner_type === "individual";
-  const { data: organization, error: organizationError } = isPersonalCampaign
-    ? { data: null, error: null }
-    : await supabase
-        .from("organizations")
-        .select("id, name, avatar_url, license_status")
-        .eq("id", campaign.organization_id)
-        .maybeSingle();
 
-  if (organizationError) throw new Error(organizationError.message);
-  if (!isPersonalCampaign && (!organization || organization.license_status !== "approved")) notFound();
-
+  // Không có bước nào dưới đây phụ thuộc kết quả tổ chức, nên gộp luôn vào cùng một đợt song song
+  // thay vì chờ xong tra cứu tổ chức rồi mới chạy tiếp (bớt thêm 1 vòng round-trip).
   const [
+    organizationResult,
     { data: media, error: mediaError },
     { data: updates, error: updatesError },
     { data: donationAvailable, error: donationAvailabilityError },
     { data: seo, error: seoError },
     { data: shareSettings, error: shareError },
     { data: publicDisbursements, error: disbursementError },
+    authResult,
+    summaryResult,
   ] = await Promise.all([
+    isPersonalCampaign
+      ? Promise.resolve({ data: null, error: null })
+      : supabase.from("organizations").select("id, name, avatar_url, license_status").eq("id", campaign.organization_id).maybeSingle(),
     supabase
       .from("campaign_media")
       .select("id, campaign_id, update_id, media_type, slot, provider, title, alt_text, url, public_id, thumbnail_url, sort_order, is_public, created_at, updated_at")
@@ -94,7 +92,15 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
       .eq("is_public", true)
       .maybeSingle(),
     supabase.rpc("get_public_campaign_cashflow", { p_campaign_id: campaign.id }),
+    // Không phụ thuộc campaign_id của các query ở trên, chỉ cần campaign.id/cookie đã có sẵn —
+    // gộp vào cùng một đợt song song thay vì chờ xong đợt trên rồi mới chạy tiếp (bớt 1 vòng round-trip).
+    supabase.auth.getUser(),
+    supabase.rpc("get_campaign_donation_summary", { p_campaign_id: campaign.id }),
   ]);
+
+  const { data: organization, error: organizationError } = organizationResult;
+  if (organizationError) throw new Error(organizationError.message);
+  if (!isPersonalCampaign && (!organization || organization.license_status !== "approved")) notFound();
 
   if (mediaError) throw new Error(mediaError.message);
   if (updatesError) throw new Error(updatesError.message);
@@ -102,11 +108,6 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
   if (seoError) throw new Error(seoError.message);
   if (shareError) throw new Error(shareError.message);
   if (disbursementError) console.warn("Public disbursements are unavailable", { campaignId: campaign.id, code: disbursementError.code });
-
-  const [authResult, summaryResult] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase.rpc("get_campaign_donation_summary", { p_campaign_id: campaign.id }),
-  ]);
 
   if (summaryResult.error) {
     console.warn("Campaign donation summary is unavailable", {

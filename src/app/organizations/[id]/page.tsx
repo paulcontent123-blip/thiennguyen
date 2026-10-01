@@ -64,7 +64,11 @@ export default async function PublicOrganizationPage({
 
   const rows = campaignResult.data ?? [];
   const ids = rows.map((campaign) => campaign.id);
-  const [mediaResult, profileResult] = await Promise.all([
+  // followStates chỉ cần authResult (đã có sẵn), không phụ thuộc profileResult -> gộp cùng đợt
+  // song song thay vì chờ xác định vai trò xong mới chạy tiếp (bớt 1 vòng round-trip). Vai trò
+  // chỉ dùng để hiển thị UI; campaign_follows vốn chỉ có dữ liệu thật cho tài khoản donor nên
+  // truyền user id không điều kiện cũng an toàn (role khác đơn giản là không có dòng nào).
+  const [mediaResult, profileResult, followStates] = await Promise.all([
     ids.length
       ? supabase
           .from("campaign_media")
@@ -77,11 +81,11 @@ export default async function PublicOrganizationPage({
     authResult.data.user
       ? supabase.from("profiles").select("role").eq("id", authResult.data.user.id).maybeSingle()
       : Promise.resolve({ data: null, error: null }),
+    getCampaignFollowStates(supabase, ids, authResult.data.user?.id),
   ]);
   if (mediaResult.error) throw new Error(mediaResult.error.message);
 
   const viewer = !authResult.data.user ? "guest" : profileResult.data?.role === "donor" ? "donor" : "other";
-  const followStates = await getCampaignFollowStates(supabase, ids, viewer === "donor" ? authResult.data.user?.id : undefined);
   const covers = new Map<string, string>();
   for (const item of mediaResult.data ?? []) {
     if (!covers.has(item.campaign_id)) covers.set(item.campaign_id, item.url);

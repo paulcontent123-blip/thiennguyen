@@ -33,7 +33,7 @@ export type AdminWalletAllocation = {
 
 const money = new Intl.NumberFormat("vi-VN");
 const dateTime = new Intl.DateTimeFormat("vi-VN", { dateStyle: "short", timeStyle: "short" });
-const statusLabel: Record<string, string> = { pending: "Chờ đối soát", completed: "Đã cộng ví", rejected: "Không xác nhận" };
+const statusLabel: Record<string, string> = { pending: "Chờ đối soát", completed: "Đã cộng ví", rejected: "Không xác nhận", cancelled: "Người dùng đã hủy" };
 
 function ownerName(item: AdminWalletTopup) {
   const profile = Array.isArray(item.profiles) ? item.profiles[0] : item.profiles;
@@ -91,6 +91,7 @@ export function AdminWalletPanel({ topups, allocations }: { topups: AdminWalletT
 
     <div>
       <h2 className="font-serif text-lg font-semibold text-chamDeep">Đã xử lý gần đây</h2>
+      <p className="mt-1 text-xs leading-5 text-inkSoft">Nếu sao kê có tiền vào khớp một lệnh chuyển khoản đã hủy, không xác nhận cộng ví tự động; cần liên hệ người dùng và xử lý khoản tiền riêng.</p>
       <div className="mt-3 overflow-x-auto rounded-[8px] border border-line bg-white"><table className="w-full min-w-[640px] text-[13px]"><thead className="bg-paper text-left text-[11px] font-bold uppercase text-inkMid"><tr><th className="px-3 py-2.5">Mã</th><th className="px-3 py-2.5">Người nạp</th><th className="px-3 py-2.5">Số tiền</th><th className="px-3 py-2.5">Trạng thái</th></tr></thead><tbody>
         {processed.length === 0 ? <tr><td colSpan={4} className="px-3 py-8 text-center text-inkSoft">Chưa có yêu cầu nào được xử lý.</td></tr> : processed.map((item) => <tr key={item.id} className="border-t border-line"><td className="px-3 py-2.5 font-mono text-xs">{item.tx_ref}</td><td className="px-3 py-2.5">{ownerName(item)}</td><td className="px-3 py-2.5 font-mono font-bold text-son">{money.format(Number(item.amount_vnd))}đ</td><td className="px-3 py-2.5">{statusLabel[item.status] ?? item.status}{item.admin_note ? <div className="text-xs text-son">Lý do: {item.admin_note}</div> : null}</td></tr>)}
       </tbody></table></div>

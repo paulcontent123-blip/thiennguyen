@@ -20,7 +20,8 @@ export type WalletTopupItem = {
   id: string;
   txRef: string;
   amountVnd: number;
-  status: "pending" | "completed" | "rejected";
+  status: "pending" | "completed" | "rejected" | "cancelled";
+  paymentProvider: string;
   adminNote: string | null;
   createdAt: string;
   completedAt: string | null;

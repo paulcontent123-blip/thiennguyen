@@ -207,3 +207,18 @@ export async function createWalletTopupVnpay(formData: FormData): Promise<Wallet
   });
   return { ok: true, redirectUrl };
 }
+
+export async function cancelWalletTopup(id: string): Promise<{ ok: boolean; message: string }> {
+  const { supabase } = await requireActionRole(["donor", "org"]);
+  const { error } = await supabase.rpc("cancel_wallet_topup", { p_topup_id: id });
+  if (error) {
+    console.error("Failed to cancel wallet top-up", { code: error.code, message: error.message });
+    if (error.message.includes("WALLET_TOPUP_NOT_CANCELLABLE")) {
+      return { ok: false, message: "Chỉ có thể hủy lệnh chuyển khoản thủ công đang chờ đối soát. Lệnh VNPAY hoặc đã xử lý không thể hủy." };
+    }
+    return { ok: false, message: "Không thể hủy lệnh nạp. Hãy tải lại trang và thử lại." };
+  }
+  revalidatePath("/wallet");
+  revalidatePath("/admin");
+  return { ok: true, message: "Đã hủy lệnh nạp. Chỉ hủy khi bạn chưa chuyển tiền; nếu đã chuyển, hãy liên hệ Admin để đối soát thủ công." };
+}

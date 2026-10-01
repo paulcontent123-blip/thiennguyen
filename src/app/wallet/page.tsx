@@ -12,7 +12,7 @@ export default async function WalletPage() {
     supabase.from("wallet_ledger").select("id, entry_type, amount_vnd, campaign_id, transaction_id, note, created_at").eq("user_id", user.id).order("created_at", { ascending: false }).limit(100),
     supabase
       .from("wallet_topups")
-      .select("id, tx_ref, amount_vnd, status, admin_note, created_at, completed_at")
+      .select("id, tx_ref, amount_vnd, status, admin_note, payment_provider, created_at, completed_at")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50),
@@ -39,6 +39,7 @@ export default async function WalletPage() {
   }));
   const topups: WalletTopupItem[] = (topupResult.data ?? []).map((row) => ({
     id: row.id, txRef: row.tx_ref, amountVnd: Number(row.amount_vnd), status: row.status as WalletTopupItem["status"],
+    paymentProvider: row.payment_provider,
     adminNote: row.admin_note, createdAt: row.created_at, completedAt: row.completed_at,
   }));
   const allocations: WalletAllocationItem[] = (allocationResult.data ?? []).map((row) => {

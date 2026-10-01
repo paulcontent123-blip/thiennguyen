@@ -48,11 +48,11 @@ export async function SiteHeader() {
 
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/95 backdrop-blur">
-      <nav className="relative mx-auto flex max-w-[1160px] items-center gap-3 px-4 py-3 md:gap-6 md:px-7 md:py-3.5">
+      <nav className="relative mx-auto flex max-w-[1440px] items-center gap-2 px-4 py-3 md:px-6 md:py-3.5 2xl:gap-4 2xl:px-7">
         <Link href="/" className="flex items-center gap-2 whitespace-nowrap font-serif text-lg font-semibold text-chamDeep">
           <span className="text-xl">&#10084;</span> Thiện Nguyện
         </Link>
-        <div className="hidden flex-1 flex-wrap items-center gap-x-5 gap-y-1 text-[13px] font-bold text-inkMid md:flex">
+        <div className="hidden min-w-0 flex-1 items-center justify-center gap-x-3 whitespace-nowrap text-xs font-bold text-inkMid 2xl:flex 2xl:gap-x-4">
           {navLinks.map(([label, href]) => (
             <Link key={href} href={href} className="transition hover:text-son">
               {label}

@@ -19,7 +19,7 @@ export function MobileNav({ links }: { links: readonly (readonly [string, string
   }, [open]);
 
   return (
-    <div className="md:hidden">
+    <div className="2xl:hidden">
       <button
         type="button"
         aria-label={open ? "Đóng menu" : "Mở menu"}

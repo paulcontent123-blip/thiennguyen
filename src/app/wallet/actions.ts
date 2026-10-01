@@ -165,6 +165,7 @@ export async function allocateWalletToCampaign(formData: FormData): Promise<Wall
   if (!row) return { ok: false, message: "Không nhận được kết quả phân bổ từ hệ thống." };
 
   const receipt = await deliverDonationReceipt(row.transaction_id);
+  if (!receipt.ok) console.error("Wallet allocation receipt delivery failed", { txRef: row.tx_ref, message: receipt.message });
   revalidatePath("/wallet");
   revalidatePath("/account");
   revalidatePath("/admin");

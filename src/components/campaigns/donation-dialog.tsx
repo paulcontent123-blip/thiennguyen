@@ -5,11 +5,14 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { createDonationIntent, createDonationIntentVnpay } from "@/app/campaigns/[slug]/actions";
+import { allocateWalletToCampaign } from "@/app/wallet/actions";
 import {
   DONATION_MAX_AMOUNT,
   DONATION_MIN_AMOUNT,
   type DonationIntent,
 } from "@/lib/donations/types";
+import { WALLET_MIN_TOPUP, type WalletAllocationResult } from "@/lib/wallet/types";
+import { createClient } from "@/lib/supabase/client";
 
 const currency = new Intl.NumberFormat("vi-VN");
 const presetAmounts = [100_000, 300_000, 500_000, 1_000_000];
@@ -44,6 +47,13 @@ export function DonationDialog({
   const [copied, setCopied] = useState<string | null>(null);
   const [vnpayLoading, setVnpayLoading] = useState(false);
   const [showVietQrFallback, setShowVietQrFallback] = useState(false);
+  const [method, setMethod] = useState<"transfer" | "wallet">("transfer");
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [walletAmount, setWalletAmount] = useState("100000");
+  const [walletLoading, setWalletLoading] = useState(false);
+  const [walletError, setWalletError] = useState<string | null>(null);
+  const [walletSuccess, setWalletSuccess] = useState<{ txRef: string; balanceAfterVnd: number; message: string } | null>(null);
+  const [walletRequestId, setWalletRequestId] = useState("");
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
@@ -60,7 +70,23 @@ export function DonationDialog({
     };
   }, [open]);
 
+  useEffect(() => {
+    if (!open || method !== "wallet" || !isAuthenticated || walletBalance !== null) return;
+    let cancelled = false;
+    createClient()
+      .from("wallet_accounts")
+      .select("available_balance_vnd")
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setWalletBalance(Number(data?.available_balance_vnd ?? 0));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, method, isAuthenticated, walletBalance]);
+
   const numericAmount = Number(amount || 0);
+  const numericWalletAmount = Number(walletAmount || 0);
   const allocation = useMemo(() => ({
     execution: Math.round(numericAmount * 0.9),
     operation: numericAmount - Math.round(numericAmount * 0.9),
@@ -70,6 +96,35 @@ export function DonationDialog({
     setOpen(false);
     setError(null);
     setCopied(null);
+    setWalletSuccess(null);
+    setWalletError(null);
+  }
+
+  async function handleWalletSubmit() {
+    setWalletLoading(true);
+    setWalletError(null);
+    const requestId = walletRequestId || window.crypto.randomUUID();
+    if (!walletRequestId) setWalletRequestId(requestId);
+
+    const formData = new FormData();
+    formData.set("campaignId", campaignId);
+    formData.set("amountVnd", walletAmount);
+    formData.set("requestId", requestId);
+
+    try {
+      const result: WalletAllocationResult = await allocateWalletToCampaign(formData);
+      if (!result.ok) {
+        setWalletError(result.message);
+        return;
+      }
+      setWalletSuccess({ txRef: result.txRef, balanceAfterVnd: result.balanceAfterVnd, message: result.message });
+      setWalletBalance(result.balanceAfterVnd);
+      setWalletRequestId(window.crypto.randomUUID());
+    } catch {
+      setWalletError("Không thể phân bổ từ ví lúc này. Vui lòng thử lại.");
+    } finally {
+      setWalletLoading(false);
+    }
   }
 
   async function handleSubmit(formData: FormData) {
@@ -165,8 +220,88 @@ export function DonationDialog({
                       setError(null);
                     }}
                   />
+                ) : walletSuccess ? (
+                  <div>
+                    <p className="eyebrow">Đã ủng hộ từ ví</p>
+                    <h2 className="mt-2 font-serif text-2xl font-semibold text-chamDeep">Cảm ơn bạn!</h2>
+                    <p className="mt-1 text-sm leading-6 text-inkMid">{campaignTitle}</p>
+                    <div className="mt-5 rounded-[10px] border border-lua/30 bg-lua/10 px-4 py-3 text-sm leading-6 text-lua">
+                      {walletSuccess.message}
+                    </div>
+                    <dl className="mt-4 divide-y divide-line text-sm">
+                      <div className="flex justify-between gap-4 py-2"><dt className="text-inkSoft">Mã giao dịch</dt><dd className="font-mono font-semibold text-chamDeep">{walletSuccess.txRef}</dd></div>
+                      <div className="flex justify-between gap-4 py-2"><dt className="text-inkSoft">Số dư ví còn lại</dt><dd className="font-mono font-semibold text-chamDeep">{currency.format(walletSuccess.balanceAfterVnd)}đ</dd></div>
+                    </dl>
+                    <div className="mt-5 flex flex-col gap-2 sm:flex-row">
+                      <Link href="/account" className="button-primary flex-1 text-center">Xem lịch sử giao dịch</Link>
+                      <button type="button" onClick={close} className="flex-1 rounded-[40px] border border-lineStrong px-4 py-2.5 text-sm font-bold text-chamDeep hover:border-son hover:text-son">Đóng</button>
+                    </div>
+                  </div>
                 ) : (
                   <>
+                    <div className="mb-4 flex gap-2 rounded-[40px] bg-paper p-1">
+                      <button
+                        type="button"
+                        onClick={() => setMethod("transfer")}
+                        className={`flex-1 rounded-[40px] py-2 text-sm font-bold transition ${method === "transfer" ? "bg-white text-son shadow-card" : "text-inkMid"}`}
+                      >
+                        💵 Chuyển khoản
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setMethod("wallet")}
+                        className={`flex-1 rounded-[40px] py-2 text-sm font-bold transition ${method === "wallet" ? "bg-white text-son shadow-card" : "text-inkMid"}`}
+                      >
+                        💳 Từ ví
+                      </button>
+                    </div>
+
+                    {method === "wallet" ? (
+                      <div>
+                        <p className="eyebrow">Ví Thiện Nguyện</p>
+                        <h2 className="mt-2 pr-8 font-serif text-2xl font-semibold text-chamDeep">Ủng hộ từ ví</h2>
+                        <p className="mt-1 text-sm leading-6 text-inkMid">{campaignTitle}</p>
+
+                        {!isAuthenticated ? (
+                          <div className="mt-5 rounded-[10px] border border-line bg-paper p-4 text-sm leading-6 text-inkMid">
+                            Bạn cần đăng nhập để dùng số dư ví.
+                            <Link href={`/login?next=${encodeURIComponent(`/campaigns/${campaignSlug}`)}`} className="button-primary mt-3 block text-center">Đăng nhập</Link>
+                          </div>
+                        ) : (
+                          <div className="mt-5 space-y-4">
+                            {walletError ? <p className="rounded-[8px] bg-son/10 px-3 py-2.5 text-sm text-son">{walletError}</p> : null}
+                            <div className="rounded-[10px] bg-chamDeep p-4 text-white">
+                              <p className="text-xs text-white/60">Số dư khả dụng</p>
+                              <p className="mt-1 font-mono text-xl font-bold text-nghe">{walletBalance === null ? "Đang tải…" : `${currency.format(walletBalance)}đ`}</p>
+                            </div>
+                            <label className="grid gap-1 text-sm font-semibold text-chamDeep">
+                              Số tiền ủng hộ (VND)
+                              <input
+                                inputMode="numeric"
+                                value={walletAmount}
+                                onChange={(event) => setWalletAmount(event.target.value.replace(/[^0-9]/g, "").slice(0, 11))}
+                                className="rounded-[8px] border border-line px-4 py-3 font-mono font-normal outline-none focus:border-son"
+                              />
+                              <span className="text-xs font-normal text-inkSoft">
+                                {numericWalletAmount ? `${currency.format(numericWalletAmount)}đ` : `Tối thiểu ${currency.format(WALLET_MIN_TOPUP)}đ`}
+                                {walletBalance !== null && numericWalletAmount > walletBalance ? " — vượt số dư khả dụng" : ""}
+                              </span>
+                            </label>
+                            <button
+                              type="button"
+                              onClick={handleWalletSubmit}
+                              disabled={walletLoading || walletBalance === null || numericWalletAmount < WALLET_MIN_TOPUP || numericWalletAmount > walletBalance}
+                              className="button-primary w-full disabled:cursor-wait disabled:opacity-50"
+                            >
+                              {walletLoading ? "Đang xử lý…" : "Xác nhận ủng hộ từ ví"}
+                            </button>
+                            <p className="text-center text-[11px] leading-5 text-inkSoft">Số tiền được trừ khỏi ví và ghi nhận ngay lập tức, không cần Admin đối soát.</p>
+                            <Link href="/wallet" className="block text-center text-xs font-semibold text-sky hover:underline">Chưa đủ số dư? Nạp thêm vào ví →</Link>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <>
                     <p className="eyebrow">VietQR động</p>
                     <h2 className="mt-2 pr-8 font-serif text-2xl font-semibold text-chamDeep">Ủng hộ chiến dịch</h2>
                     <p className="mt-1 text-sm leading-6 text-inkMid">{campaignTitle}</p>
@@ -259,6 +394,8 @@ export function DonationDialog({
                         </div>
                       ) : null}
                     </form>
+                  </>
+                )}
                   </>
                 )}
               </div>

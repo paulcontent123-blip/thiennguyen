@@ -32,20 +32,13 @@ export async function deliverDonationReceipt(transactionId: string): Promise<Rec
     return { ok: true, hash: "", providerId: null };
   }
 
+  // Ghi trạng thái "đang gửi"/"đã gửi"/"gửi lỗi" qua RPC riêng (chạy bằng service role) thay vì
+  // update trực tiếp — update thẳng sẽ bị guard_transaction_reconciliation_fields chặn vì service
+  // role không phải phiên Admin cũng không phải IPN VNPAY.
   const attempt = Number(transaction.receipt_email_attempts || 0) + 1;
-  const { data: claimed, error: claimError } = await admin
-    .from("transactions")
-    .update({
-      receipt_email_status: "sending",
-      receipt_email_attempts: attempt,
-      receipt_email_last_error: null,
-      receipt_next_retry_at: null,
-    })
-    .eq("id", transaction.id)
-    .in("receipt_email_status", ["pending", "failed"])
-    .select("id")
-    .maybeSingle();
+  const { data: claimedRows, error: claimError } = await admin.rpc("claim_receipt_delivery", { p_transaction_id: transaction.id });
   if (claimError) return { ok: false, message: claimError.message };
+  const claimed = Array.isArray(claimedRows) ? claimedRows[0] : claimedRows;
   if (!claimed) return { ok: false, message: "Biên nhận đang được một tiến trình khác xử lý." };
 
   const campaign = relation(transaction.campaigns as CampaignRelation | CampaignRelation[] | null);
@@ -76,27 +69,28 @@ export async function deliverDonationReceipt(transactionId: string): Promise<Rec
       sha256: hash,
       filename: `bien-nhan-${transaction.tx_ref}.pdf`,
     });
-    const { error: updateError } = await admin.from("transactions").update({
-      receipt_pdf_hash: hash,
-      receipt_generated_at: completedAt,
-      receipt_email_status: "sent",
-      receipt_sent_at: new Date().toISOString(),
-      receipt_provider_id: sent.id,
-      receipt_email_last_error: null,
-      receipt_next_retry_at: null,
-    }).eq("id", transaction.id);
+    const { error: updateError } = await admin.rpc("finalize_receipt_delivery", {
+      p_transaction_id: transaction.id,
+      p_success: true,
+      p_hash: hash,
+      p_provider_id: sent.id,
+      p_error_message: null,
+      p_retry_delay_minutes: null,
+    });
     if (updateError) throw updateError;
     return { ok: true, hash, providerId: sent.id };
   } catch (sendError) {
     const message = sendError instanceof Error ? sendError.message : "Không gửi được email biên nhận.";
     const delayMinutes = Math.min(60, 2 ** Math.min(attempt, 5));
-    await admin.from("transactions").update({
-      receipt_pdf_hash: hash,
-      receipt_generated_at: completedAt,
-      receipt_email_status: "failed",
-      receipt_email_last_error: message.slice(0, 1000),
-      receipt_next_retry_at: new Date(Date.now() + delayMinutes * 60_000).toISOString(),
-    }).eq("id", transaction.id);
+    const { error: finalizeError } = await admin.rpc("finalize_receipt_delivery", {
+      p_transaction_id: transaction.id,
+      p_success: false,
+      p_hash: hash,
+      p_provider_id: null,
+      p_error_message: message,
+      p_retry_delay_minutes: delayMinutes,
+    });
+    if (finalizeError) console.error("Failed to record receipt delivery failure", { txRef: transaction.tx_ref, finalizeError });
     return { ok: false, message };
   }
 }

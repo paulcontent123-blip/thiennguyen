@@ -31,13 +31,18 @@ async function getCampaigns(ownerType?: CampaignOwnerType): Promise<CampaignCard
   if (rows.length === 0) return [];
 
   const campaignIds = rows.map((row) => row.id);
-  const { data: media, error: mediaError } = await supabase
-    .from("campaign_media")
-    .select("campaign_id, url, thumbnail_url")
-    .in("campaign_id", campaignIds)
-    .eq("media_type", "cover")
-    .eq("is_public", true)
-    .order("sort_order", { ascending: true });
+  // Media và tổng tiền đã nhận chỉ phụ thuộc campaignIds, không phụ thuộc nhau -> chạy song song.
+  // Tổng tiền dùng một lượt gọi duy nhất cho cả danh sách thay vì N lượt gọi riêng từng chiến dịch (N+1).
+  const [{ data: media, error: mediaError }, { data: summaryRows, error: summaryError }] = await Promise.all([
+    supabase
+      .from("campaign_media")
+      .select("campaign_id, url, thumbnail_url")
+      .in("campaign_id", campaignIds)
+      .eq("media_type", "cover")
+      .eq("is_public", true)
+      .order("sort_order", { ascending: true }),
+    supabase.rpc("get_campaign_donation_summaries", { p_campaign_ids: campaignIds }),
+  ]);
 
   if (mediaError) console.warn("Homepage campaign covers are unavailable", mediaError.code);
   const coverByCampaign = new Map<string, string>();
@@ -45,16 +50,12 @@ async function getCampaigns(ownerType?: CampaignOwnerType): Promise<CampaignCard
     if (!coverByCampaign.has(item.campaign_id)) coverByCampaign.set(item.campaign_id, item.thumbnail_url || item.url);
   }
 
-  const summaries = await Promise.all(rows.map(async (row) => {
-    const { data: summary, error: summaryError } = await supabase.rpc("get_campaign_donation_summary", { p_campaign_id: row.id });
-    if (summaryError) {
-      console.warn("Homepage campaign summary is unavailable", { campaignId: row.id, code: summaryError.code });
-      return [row.id, 0] as const;
-    }
-    const summaryRow = Array.isArray(summary) ? summary[0] : summary;
-    return [row.id, Number(summaryRow?.total_amount_vnd ?? 0)] as const;
-  }));
-  const receivedByCampaign = new Map(summaries);
+  if (summaryError) console.warn("Homepage campaign summaries are unavailable", summaryError.code);
+  const receivedByCampaign = new Map(
+    ((summaryRows ?? []) as { campaign_id: string; total_amount_vnd: number | string }[]).map(
+      (row) => [row.campaign_id, Number(row.total_amount_vnd ?? 0)] as const,
+    ),
+  );
 
   return rows.map((row) => ({
     id: row.id,

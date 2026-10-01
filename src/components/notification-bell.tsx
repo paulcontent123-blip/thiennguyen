@@ -85,12 +85,14 @@ export function NotificationBell({ userId }: { userId: string }) {
   }
 
   async function markAllRead() {
-    const unreadIds = items.filter((item) => !item.read_at).map((item) => item.id);
-    if (!unreadIds.length) return;
+    if (unreadCount === 0) return;
     setLoading(true);
     setItems((current) => current.map((item) => (item.read_at ? item : { ...item, read_at: new Date().toISOString() })));
     setUnreadCount(0);
-    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).in("id", unreadIds).is("read_at", null);
+    // Không giới hạn theo danh sách đang hiển thị (chỉ tải 30 thông báo mới nhất) — phải cập nhật
+    // TOÀN BỘ thông báo chưa đọc của người dùng, kể cả những thông báo cũ hơn 30 cái gần nhất.
+    await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", userId).is("read_at", null);
+    await fetchNotifications();
     setLoading(false);
   }
 

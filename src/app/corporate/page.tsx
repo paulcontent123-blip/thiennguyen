@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 const currency = new Intl.NumberFormat("vi-VN");
 
 type SponsorProject = { id: string; slug: string; title: string; province: string | null; targetAmount: number; receivedAmount: number; percent: number };
+type CampaignDonationSummary = { campaign_id: string; total_amount_vnd: number | string };
 
 async function getSponsorProjects(): Promise<SponsorProject[]> {
   if (!hasSupabaseEnv()) return [];
@@ -20,14 +21,44 @@ async function getSponsorProjects(): Promise<SponsorProject[]> {
     .limit(12);
   if (error || !data) return [];
 
-  const projects = await Promise.all(data.map(async (row) => {
-    const { data: summary } = await supabase.rpc("get_campaign_donation_summary", { p_campaign_id: row.id });
-    const summaryRow = Array.isArray(summary) ? summary[0] : summary;
-    const receivedAmount = Number(summaryRow?.total_amount_vnd ?? 0);
+  const campaignIds = data.map((row) => row.id);
+  const { data: summaries, error: summaryError } = await supabase.rpc(
+    "get_campaign_donation_summaries",
+    { p_campaign_ids: campaignIds },
+  );
+
+  let summaryRows = (summaries ?? []) as CampaignDonationSummary[];
+  if (summaryError) {
+    // Preserve donation totals if a deployment has not applied the batch RPC
+    // migration yet. This compatibility path is temporary and less efficient.
+    console.error("Corporate campaign donation summary query failed", summaryError);
+    const fallbackRows = await Promise.all(data.map(async (row) => {
+      const { data: summary, error: fallbackError } = await supabase.rpc(
+        "get_campaign_donation_summary",
+        { p_campaign_id: row.id },
+      );
+      if (fallbackError) {
+        console.error("Corporate campaign donation summary fallback failed", fallbackError);
+        return null;
+      }
+      const summaryRow = Array.isArray(summary) ? summary[0] : summary;
+      return summaryRow
+        ? { campaign_id: row.id, total_amount_vnd: summaryRow.total_amount_vnd }
+        : null;
+    }));
+    summaryRows = fallbackRows.filter((summary): summary is CampaignDonationSummary => summary !== null);
+  }
+
+  const amountsByCampaign = new Map<string, number>(
+    summaryRows.map((summary) => [summary.campaign_id, Number(summary.total_amount_vnd)]),
+  );
+
+  const projects = data.map((row) => {
+    const receivedAmount = amountsByCampaign.get(row.id) ?? 0;
     const targetAmount = Number(row.target_amount);
     const percent = targetAmount > 0 ? Math.min(100, Math.round((receivedAmount / targetAmount) * 100)) : 0;
     return { id: row.id, slug: row.slug, title: row.title, province: row.province, targetAmount, receivedAmount, percent };
-  }));
+  });
 
   return projects.sort((a, b) => a.percent - b.percent).slice(0, 3);
 }

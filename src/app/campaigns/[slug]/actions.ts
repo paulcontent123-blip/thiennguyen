@@ -7,8 +7,59 @@ import {
   DONATION_MIN_AMOUNT,
   type DonationActionResult,
 } from "@/lib/donations/types";
+import { sendAdminPendingPaymentEmail, sendDonorPendingPaymentEmail } from "@/lib/email/notifications";
+import { notifyAdmins, notifyUser } from "@/lib/notifications/create";
 import { buildVnpayPaymentUrl, isVnpayConfigured } from "@/lib/payments/vnpay";
 import { createClient } from "@/lib/supabase/server";
+
+function appUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
+async function notifyPendingDonation(input: {
+  userId: string | null; txRef: string; amountVnd: number; receiptEmail: string; donorName: string; campaignTitle: string;
+  bankName: string; accountNo: string; accountName: string; transferDescription: string;
+}) {
+  const amountText = new Intl.NumberFormat("vi-VN").format(input.amountVnd);
+  try {
+    await sendDonorPendingPaymentEmail({
+      to: input.receiptEmail, donorName: input.donorName || undefined, kind: "donation",
+      txRef: input.txRef, amountVnd: input.amountVnd, campaignTitle: input.campaignTitle,
+      bankName: input.bankName, accountNo: input.accountNo, accountName: input.accountName,
+      transferDescription: input.transferDescription,
+    });
+  } catch (emailError) {
+    console.error("Failed to notify donor of pending donation", { txRef: input.txRef, emailError });
+  }
+
+  // Thông báo trong app chỉ ghi được nếu donor có tài khoản (ủng hộ ẩn danh không có user_id).
+  if (input.userId) {
+    await notifyUser({
+      userId: input.userId, category: "payment_pending",
+      title: `Đã ghi nhận yêu cầu chuyển khoản ${amountText}đ`,
+      body: `Mã ${input.txRef} — ủng hộ "${input.campaignTitle}". Chưa được Admin đối soát.`,
+      link: "/account",
+    });
+  }
+  await notifyAdmins({
+    category: "admin_alert",
+    title: `Giao dịch mới chờ đối soát — ${amountText}đ`,
+    body: `${input.txRef} · ${input.donorName || "Ẩn danh"} (${input.receiptEmail}) ủng hộ "${input.campaignTitle}".`,
+    link: "/admin?panel=donations",
+  });
+
+  const adminTo = process.env.ADMIN_PAYMENT_ALERT_EMAIL?.trim();
+  if (!adminTo) return;
+  try {
+    await sendAdminPendingPaymentEmail({
+      to: adminTo, kind: "donation", txRef: input.txRef, amountVnd: input.amountVnd,
+      donorName: input.donorName || null, contactEmail: input.receiptEmail, campaignTitle: input.campaignTitle,
+      adminUrl: `${appUrl()}/admin?panel=donations`,
+    });
+  } catch (emailError) {
+    console.error("Failed to notify admin of pending donation", { txRef: input.txRef, emailError });
+  }
+}
 
 export type VnpayRedirectResult = { ok: true; redirectUrl: string } | { ok: false; message: string };
 
@@ -96,6 +147,16 @@ export async function createDonationIntent(formData: FormData): Promise<Donation
       txRef: row.tx_ref,
     },
   );
+
+  const [{ data: campaignRow }, { data: authData }] = await Promise.all([
+    supabase.from("campaigns").select("title").eq("id", campaignId).maybeSingle(),
+    supabase.auth.getUser(),
+  ]);
+  await notifyPendingDonation({
+    userId: authData.user?.id ?? null,
+    txRef: row.tx_ref, amountVnd, receiptEmail, donorName, campaignTitle: campaignRow?.title ?? "chiến dịch",
+    bankName: row.bank_id, accountNo: row.account_no, accountName: row.account_name, transferDescription: row.transfer_description,
+  });
 
   return {
     ok: true,

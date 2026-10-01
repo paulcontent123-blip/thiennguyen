@@ -105,6 +105,90 @@ export function sendDonationConfirmedEmail(input: DonationConfirmedEmailInput): 
   });
 }
 
+type PendingPaymentKind = "donation" | "wallet_topup";
+
+type DonorPendingPaymentEmailInput = {
+  to: string;
+  donorName?: string;
+  kind: PendingPaymentKind;
+  txRef: string;
+  amountVnd: number;
+  campaignTitle?: string | null;
+  bankName: string;
+  accountNo: string;
+  accountName: string;
+  transferDescription: string;
+};
+
+export function sendDonorPendingPaymentEmail(input: DonorPendingPaymentEmailInput): Promise<EmailSendResult> {
+  const donorName = input.donorName ? escapeHtml(input.donorName) : "bạn";
+  const amount = new Intl.NumberFormat("vi-VN").format(input.amountVnd);
+  const txRef = escapeHtml(input.txRef);
+  const purposeText = input.kind === "donation"
+    ? `ủng hộ chiến dịch "${input.campaignTitle || ""}"`
+    : "nạp tiền vào ví";
+  const purposeHtml = input.kind === "donation"
+    ? `ủng hộ chiến dịch "${escapeHtml(input.campaignTitle || "")}"`
+    : "nạp tiền vào ví";
+
+  return getEmailProvider().send({
+    to: input.to,
+    subject: `Đã ghi nhận yêu cầu chuyển khoản ${amount}đ — chờ Admin đối soát`,
+    text: `Xin chào ${input.donorName || "bạn"}, hệ thống đã ghi nhận yêu cầu ${purposeText} với mã giao dịch ${input.txRef}, số tiền ${amount}đ, chuyển tới tài khoản ${input.accountName} (${input.bankName} - ${input.accountNo}), nội dung chuyển khoản "${input.transferDescription}". Tiền này đi thẳng vào tài khoản trung tâm, CHƯA được Admin đối soát và CHƯA được ghi nhận thành công. Bạn sẽ nhận thêm email khi Admin xác nhận đã khớp sao kê ngân hàng.`,
+    html: `<p>Xin chào ${donorName},</p><p>Hệ thống đã ghi nhận yêu cầu ${purposeHtml} với mã giao dịch <strong>${txRef}</strong>, số tiền <strong>${amount}đ</strong>.</p><p>Chuyển tới tài khoản: <strong>${escapeHtml(input.accountName)}</strong> (${escapeHtml(input.bankName)} - ${escapeHtml(input.accountNo)})<br/>Nội dung chuyển khoản: <strong>${escapeHtml(input.transferDescription)}</strong></p><p><strong>Lưu ý:</strong> tiền đi thẳng vào tài khoản trung tâm, hiện <strong>chưa được Admin đối soát</strong> và chưa được ghi nhận thành công. Bạn sẽ nhận thêm email khi Admin xác nhận đã khớp sao kê ngân hàng.</p>`,
+    idempotencyKey: `pending-payment-donor:${input.txRef}`,
+  });
+}
+
+type AdminPendingPaymentEmailInput = {
+  to: string;
+  kind: PendingPaymentKind;
+  txRef: string;
+  amountVnd: number;
+  donorName?: string | null;
+  contactEmail: string;
+  campaignTitle?: string | null;
+  adminUrl: string;
+};
+
+export function sendAdminPendingPaymentEmail(input: AdminPendingPaymentEmailInput): Promise<EmailSendResult> {
+  const amount = new Intl.NumberFormat("vi-VN").format(input.amountVnd);
+  const kindLabel = input.kind === "donation" ? `Ủng hộ chiến dịch${input.campaignTitle ? ` "${input.campaignTitle}"` : ""}` : "Nạp ví";
+
+  return getEmailProvider().send({
+    to: input.to,
+    subject: `[Chờ đối soát] ${kindLabel} — ${amount}đ — ${input.txRef}`,
+    text: `Có giao dịch mới chờ đối soát. Loại: ${kindLabel}. Mã: ${input.txRef}. Số tiền: ${amount}đ. Người gửi: ${input.donorName || "Ẩn danh"} (${input.contactEmail}). Kiểm tra sao kê ngân hàng rồi xác nhận tại: ${input.adminUrl}`,
+    html: `<p>Có giao dịch mới chờ đối soát.</p><ul><li><strong>Loại:</strong> ${escapeHtml(kindLabel)}</li><li><strong>Mã giao dịch:</strong> ${escapeHtml(input.txRef)}</li><li><strong>Số tiền:</strong> ${amount}đ</li><li><strong>Người gửi:</strong> ${escapeHtml(input.donorName || "Ẩn danh")} (${escapeHtml(input.contactEmail)})</li></ul><p><a href="${escapeHtml(input.adminUrl)}">Kiểm tra sao kê và xác nhận trong Admin Portal →</a></p>`,
+    idempotencyKey: `pending-payment-admin:${input.txRef}`,
+  });
+}
+
+type WalletTopupCompletedEmailInput = {
+  to: string;
+  donorName?: string | null;
+  txRef: string;
+  amountVnd: number;
+  balanceAfterVnd?: number;
+  viaGateway?: boolean;
+};
+
+export function sendWalletTopupCompletedEmail(input: WalletTopupCompletedEmailInput): Promise<EmailSendResult> {
+  const donorName = input.donorName ? escapeHtml(input.donorName) : "bạn";
+  const amount = new Intl.NumberFormat("vi-VN").format(input.amountVnd);
+  const txRef = escapeHtml(input.txRef);
+  const balanceText = typeof input.balanceAfterVnd === "number" ? ` Số dư ví hiện tại: ${new Intl.NumberFormat("vi-VN").format(input.balanceAfterVnd)}đ.` : "";
+  const confirmedBy = input.viaGateway ? "VNPAY đã xác nhận thanh toán tự động" : "Admin đã đối soát và xác nhận";
+
+  return getEmailProvider().send({
+    to: input.to,
+    subject: `Đã cộng ${amount}đ vào ví — ${input.txRef}`,
+    text: `Xin chào ${input.donorName || "bạn"}, ${confirmedBy} giao dịch nạp ví ${input.txRef} với số tiền ${amount}đ. Số dư đã được cộng vào ví của bạn.${balanceText}`,
+    html: `<p>Xin chào ${donorName},</p><p>${confirmedBy} giao dịch nạp ví <strong>${txRef}</strong> với số tiền <strong>${amount}đ</strong>. Số dư đã được cộng vào ví của bạn.</p>${balanceText ? `<p>${balanceText}</p>` : ""}`,
+    idempotencyKey: `wallet-topup-completed:${input.txRef}`,
+  });
+}
+
 type CorporateInquiryEmailInput = {
   to: string;
   inquiryId: string;

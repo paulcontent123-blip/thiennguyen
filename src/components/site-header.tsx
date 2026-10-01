@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { AuthControls } from "./auth-controls";
 import { CreateCampaignModal } from "./create-campaign-modal";
 import { MobileNav } from "./mobile-nav";
+import { NotificationBell } from "./notification-bell";
 import { getCurrentAuth } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
 
@@ -60,6 +61,7 @@ export async function SiteHeader() {
           ))}
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0 md:gap-2.5">
+          {user ? <NotificationBell userId={user.id} /> : null}
           <Suspense fallback={<div className="h-[38px] w-[92px]" />}>
             <AuthControls
               isAuthenticated={Boolean(user)}

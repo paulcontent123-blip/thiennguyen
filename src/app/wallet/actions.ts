@@ -5,8 +5,58 @@ import { revalidatePath } from "next/cache";
 import { buildVietQrUrl } from "@/lib/campaigns/content";
 import { requireActionRole } from "@/lib/auth/server";
 import { deliverDonationReceipt } from "@/lib/donations/receipt-delivery";
+import { sendAdminPendingPaymentEmail, sendDonorPendingPaymentEmail } from "@/lib/email/notifications";
+import { notifyAdmins, notifyUser } from "@/lib/notifications/create";
 import { buildVnpayPaymentUrl, isVnpayConfigured } from "@/lib/payments/vnpay";
 import { WALLET_MAX_TOPUP, WALLET_MIN_TOPUP, type WalletAllocationResult, type WalletTopupResult } from "@/lib/wallet/types";
+
+function appUrl() {
+  return (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
+}
+
+async function notifyPendingWalletTopup(input: {
+  userId: string; txRef: string; amountVnd: number; userEmail: string | undefined; donorName: string | undefined;
+  bankName: string; accountNo: string; accountName: string; transferDescription: string;
+}) {
+  const amountText = new Intl.NumberFormat("vi-VN").format(input.amountVnd);
+  if (input.userEmail) {
+    try {
+      await sendDonorPendingPaymentEmail({
+        to: input.userEmail, donorName: input.donorName, kind: "wallet_topup",
+        txRef: input.txRef, amountVnd: input.amountVnd,
+        bankName: input.bankName, accountNo: input.accountNo, accountName: input.accountName,
+        transferDescription: input.transferDescription,
+      });
+    } catch (emailError) {
+      console.error("Failed to notify donor of pending wallet top-up", { txRef: input.txRef, emailError });
+    }
+  }
+
+  await notifyUser({
+    userId: input.userId, category: "payment_pending",
+    title: `Đã ghi nhận yêu cầu nạp ví ${amountText}đ`,
+    body: `Mã ${input.txRef}. Chưa được Admin đối soát.`,
+    link: "/wallet",
+  });
+  await notifyAdmins({
+    category: "admin_alert",
+    title: `Yêu cầu nạp ví mới chờ đối soát — ${amountText}đ`,
+    body: `${input.txRef} · ${input.donorName || "Người dùng"} (${input.userEmail || "không rõ email"}).`,
+    link: "/admin?panel=wallet",
+  });
+
+  const adminTo = process.env.ADMIN_PAYMENT_ALERT_EMAIL?.trim();
+  if (!adminTo) return;
+  try {
+    await sendAdminPendingPaymentEmail({
+      to: adminTo, kind: "wallet_topup", txRef: input.txRef, amountVnd: input.amountVnd,
+      donorName: input.donorName ?? null, contactEmail: input.userEmail || "(không rõ email)",
+      adminUrl: `${appUrl()}/admin?panel=wallet`,
+    });
+  } catch (emailError) {
+    console.error("Failed to notify admin of pending wallet top-up", { txRef: input.txRef, emailError });
+  }
+}
 
 export type WalletVnpayRedirectResult = { ok: true; redirectUrl: string } | { ok: false; message: string };
 
@@ -34,7 +84,7 @@ function walletErrorMessage(message: string) {
 }
 
 export async function createWalletTopup(formData: FormData): Promise<WalletTopupResult> {
-  const { supabase } = await requireActionRole(["donor", "org"]);
+  const { supabase, user } = await requireActionRole(["donor", "org"]);
   const amount = Number(String(formData.get("amountVnd") ?? "").replace(/[^0-9]/g, ""));
   if (!Number.isSafeInteger(amount) || amount < WALLET_MIN_TOPUP || amount > WALLET_MAX_TOPUP) {
     return { ok: false, message: "Số tiền nạp phải từ 10.000đ đến 10 tỷ đồng." };
@@ -49,6 +99,10 @@ export async function createWalletTopup(formData: FormData): Promise<WalletTopup
   if (!row) return { ok: false, message: "Hệ thống không nhận được yêu cầu nạp vừa tạo." };
 
   const amountVnd = Number(row.amount_vnd);
+  await notifyPendingWalletTopup({
+    userId: user.id, txRef: row.tx_ref, amountVnd, userEmail: user.email, donorName: user.user_metadata?.full_name,
+    bankName: row.bank_id, accountNo: row.account_no, accountName: row.account_name, transferDescription: row.transfer_description,
+  });
   revalidatePath("/wallet");
   return {
     ok: true,

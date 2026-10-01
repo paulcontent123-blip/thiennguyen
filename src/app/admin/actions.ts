@@ -7,6 +7,7 @@ import { RESCUE_RESOURCE_TYPES } from "@/lib/rescue/resource-types";
 import { createRescueActivationToken } from "@/lib/rescue/activation-token";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendCampaignUpdateEmail, sendRescueInvitationEmail } from "@/lib/email/notifications";
+import { notifyUser } from "@/lib/notifications/create";
 import { deliverDonationReceipt } from "@/lib/donations/receipt-delivery";
 import { createClient } from "@/lib/supabase/server";
 
@@ -37,7 +38,7 @@ export async function confirmDonationReceived(id: string): Promise<DonationRecon
     .update({ status: "completed", completed_at: nowIso })
     .eq("id", id)
     .eq("status", "pending")
-    .select("id, tx_ref, amount_vnd, receipt_email, donor_name, campaigns(title, slug)")
+    .select("id, tx_ref, amount_vnd, receipt_email, donor_name, user_id, campaigns(title, slug)")
     .maybeSingle();
 
   if (error) return { ok: false, message: error.message };
@@ -46,6 +47,14 @@ export async function confirmDonationReceived(id: string): Promise<DonationRecon
   const campaign = Array.isArray(data.campaigns) ? data.campaigns[0] : data.campaigns;
   const receipt = await deliverDonationReceipt(data.id);
   if (!receipt.ok) console.error("Donation receipt delivery failed", { txRef: data.tx_ref, error: receipt.message });
+  if (data.user_id) {
+    await notifyUser({
+      userId: data.user_id, category: "payment_completed",
+      title: `Đã xác nhận ủng hộ ${Number(data.amount_vnd).toLocaleString("vi-VN")}đ`,
+      body: `Admin đã đối soát và xác nhận giao dịch ${data.tx_ref}${campaign?.title ? ` — "${campaign.title}"` : ""}.`,
+      link: "/account",
+    });
+  }
 
   revalidatePath("/admin");
   revalidatePath("/account");
@@ -78,11 +87,20 @@ export async function markDonationNeedsReview(id: string, formData: FormData): P
     .update({ status: "needs_review", failure_reason: note })
     .eq("id", id)
     .eq("status", "pending")
-    .select("tx_ref")
+    .select("tx_ref, user_id")
     .maybeSingle();
 
   if (error) return { ok: false, message: error.message };
   if (!data) return { ok: false, message: "Giao dịch không còn ở trạng thái chờ xác nhận." };
+
+  if (data.user_id) {
+    await notifyUser({
+      userId: data.user_id, category: "payment_rejected",
+      title: `Giao dịch ${data.tx_ref} cần xem lại`,
+      body: note,
+      link: "/account",
+    });
+  }
 
   revalidatePath("/admin");
   revalidatePath("/account");

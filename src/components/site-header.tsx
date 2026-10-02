@@ -8,13 +8,13 @@ import { getCurrentAuth } from "@/lib/auth/server";
 import { createClient } from "@/lib/supabase/server";
 
 const navLinks = [
-  ["Tin tức", "/news"],
   ["Ủng hộ", "/"],
   ["Khám phá", "/campaigns"],
   ["Bản đồ SOS", "/sos"],
   ["Nguồn lực", "/donate-items"],
   ["Minh bạch", "/transparency"],
   ["Đồng hành cùng quỹ", "/corporate"],
+  ["Tin tức", "/news"],
   ["Giới thiệu", "/introduction"],
 ] as const;
 

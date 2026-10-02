@@ -197,6 +197,14 @@ export function OrganizationDashboard({ organization, campaigns, history, page, 
               <td className="px-4 py-3 text-inkMid">{campaign.deadline ? date.format(new Date(campaign.deadline)) : "Không giới hạn"}</td>
               <td className="px-4 py-3"><CampaignPill status={campaign.status} /></td>
               <td className="w-72 px-4 py-3">
+                <div className="mb-2 flex flex-wrap gap-2">
+                  <Link
+                    href={['active', 'closed'].includes(campaign.status) ? `/organization/campaigns/${campaign.id}#disbursement` : `/organization/campaigns/${campaign.id}`}
+                    className={`inline-flex rounded-[6px] px-3 py-2 text-xs font-bold transition ${['active', 'closed'].includes(campaign.status) ? "bg-son text-white hover:bg-son/90" : "border border-lineStrong text-chamDeep hover:border-son hover:text-son"}`}
+                  >
+                    {['active', 'closed'].includes(campaign.status) ? "Quản lý & giải ngân" : "Quản lý chiến dịch"}
+                  </Link>
+                </div>
                 {editable ? <div className="space-y-2">
                   <button type="button" disabled={busy !== null || !canCreateCampaign} onClick={() => runAction(`campaign-${campaign.id}`, () => submitCampaignForReview(campaign.id), setCampaignNotice)} className="rounded-[6px] bg-chamDeep px-3 py-2 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-45">{busy === `campaign-${campaign.id}` ? "Đang gửi…" : "Gửi duyệt"}</button>
                   <details>

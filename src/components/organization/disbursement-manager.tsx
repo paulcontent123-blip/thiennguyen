@@ -41,7 +41,7 @@ export function DisbursementManager({ campaignId, representativeName, disburseme
     }).catch(() => setNotice({ ok: false, message: "Không thể xử lý hồ sơ. Vui lòng thử lại." })));
   }
 
-  return <section className="rounded-[12px] border border-line bg-white p-6">
+  return <section id="disbursement" className="scroll-mt-24 rounded-[12px] border border-line bg-white p-6">
     <div>
       <p className="eyebrow">Giải ngân</p>
       <h2 className="mt-1 font-serif text-xl font-semibold text-chamDeep">Lập hồ sơ khoản chi</h2>

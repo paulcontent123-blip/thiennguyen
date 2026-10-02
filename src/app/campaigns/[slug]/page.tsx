@@ -7,6 +7,7 @@ import { CampaignFollowButton } from "@/components/campaigns/campaign-follow-but
 import { DonationDialog } from "@/components/campaigns/donation-dialog";
 import { MobileDonateBar } from "@/components/campaigns/mobile-donate-bar";
 import { SiteHeader } from "@/components/site-header";
+import { getCurrentAuth } from "@/lib/auth/server";
 import { type CampaignMedia, type CampaignSeo, type CampaignShareSettings, type CampaignUpdate } from "@/lib/campaigns/content";
 import { getCampaignFollowStates } from "@/lib/campaigns/follows";
 import { shouldBypassImageOptimization } from "@/lib/images";
@@ -59,7 +60,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
     { data: seo, error: seoError },
     { data: shareSettings, error: shareError },
     { data: publicDisbursements, error: disbursementError },
-    authResult,
+    auth,
     summaryResult,
   ] = await Promise.all([
     isPersonalCampaign
@@ -94,7 +95,7 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
     supabase.rpc("get_public_campaign_cashflow", { p_campaign_id: campaign.id }),
     // Không phụ thuộc campaign_id của các query ở trên, chỉ cần campaign.id/cookie đã có sẵn —
     // gộp vào cùng một đợt song song thay vì chờ xong đợt trên rồi mới chạy tiếp (bớt 1 vòng round-trip).
-    supabase.auth.getUser(),
+    getCurrentAuth(),
     supabase.rpc("get_campaign_donation_summary", { p_campaign_id: campaign.id }),
   ]);
 
@@ -116,14 +117,11 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
     });
   }
 
-  const { data: viewerProfile } = authResult.data.user
-    ? await supabase.from("profiles").select("role").eq("id", authResult.data.user.id).maybeSingle()
-    : { data: null };
-  const viewer = !authResult.data.user ? "guest" : viewerProfile?.role === "donor" ? "donor" : "other";
+  const viewer = !auth.user ? "guest" : auth.role === "donor" ? "donor" : "other";
   const followStates = await getCampaignFollowStates(
     supabase,
     [campaign.id],
-    viewer === "donor" ? authResult.data.user?.id : undefined,
+    viewer === "donor" ? auth.user?.id : undefined,
   );
 
   const status = statusLabels[campaign.status] ?? { label: campaign.status, className: "bg-paperDeep text-inkMid" };
@@ -277,8 +275,8 @@ export default async function PublicCampaignDetailPage({ params }: { params: { s
                 campaignType={campaign.campaign_type}
                 canDonate={campaign.status === "active" && donationAvailable === true}
                 disabledReason={campaign.status === "closed" ? "Chiến dịch đã đóng" : campaign.status !== "active" ? "Chưa mở nhận ủng hộ" : "Hệ thống chưa mở tài khoản nhận VND"}
-                defaultEmail={authResult.data.user?.email ?? ""}
-                isAuthenticated={Boolean(authResult.data.user)}
+                defaultEmail={auth.user?.email ?? ""}
+                isAuthenticated={Boolean(auth.user)}
               />
               <CampaignShare title={campaign.title} compact settings={typedShareSettings} />
               <div className="mt-3 text-[11.5px] leading-6 text-inkSoft">🔒 Mỗi lượt ủng hộ có mã giao dịch riêng. Giao dịch chỉ chuyển từ chờ sang thành công sau khi Admin đối soát khớp sao kê ngân hàng.</div>

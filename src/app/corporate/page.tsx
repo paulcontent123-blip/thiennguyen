@@ -1,9 +1,10 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { SiteHeader } from "@/components/site-header";
 import { CorporateInquiryModal } from "@/components/corporate/corporate-inquiry-modal";
 import { MatchingFundCalculator } from "@/components/corporate/matching-fund-calculator";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 
 const currency = new Intl.NumberFormat("vi-VN");
 
@@ -11,8 +12,7 @@ type SponsorProject = { id: string; slug: string; title: string; province: strin
 type CampaignDonationSummary = { campaign_id: string; total_amount_vnd: number | string };
 
 async function getSponsorProjects(): Promise<SponsorProject[]> {
-  if (!hasSupabaseEnv()) return [];
-  const supabase = createClient();
+  const supabase = createPublicClient();
   const { data, error } = await supabase
     .from("campaigns")
     .select("id, slug, title, province, target_amount")
@@ -63,6 +63,11 @@ async function getSponsorProjects(): Promise<SponsorProject[]> {
   return projects.sort((a, b) => a.percent - b.percent).slice(0, 3);
 }
 
+const getCachedSponsorProjects = unstable_cache(getSponsorProjects, ["corporate-sponsor-projects-v1"], {
+  revalidate: 60,
+  tags: ["public-campaigns", "public-stats"],
+});
+
 const formats = [
   { anchor: "corp-m1", icon: "🏫", title: "Tài trợ Công trình Trọn gói", subtitle: "Co-Branded Impact" },
   { anchor: "corp-m2", icon: "📈", title: "Gây quỹ Đối ứng", subtitle: "Matching Fund X2/X3" },
@@ -77,7 +82,7 @@ const nonMonetaryTypes = [
 ] as const;
 
 export default async function CorporatePage() {
-  const projects = await getSponsorProjects();
+  const projects = hasSupabaseEnv() ? await getCachedSponsorProjects() : [];
 
   return (
     <main>

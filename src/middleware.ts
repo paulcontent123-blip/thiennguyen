@@ -16,6 +16,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Khách chưa có phiên đăng nhập không cần một round-trip tới Supabase trên
+  // mọi trang công khai. Route được bảo vệ vẫn luôn xác thực ở phía server.
+  const hasAuthCookie = request.cookies.getAll().some(({ name }) =>
+    name.startsWith("sb-") && name.includes("-auth-token")
+  );
+  if (!allowedRoles && !hasAuthCookie) return NextResponse.next();
+
   const { response, supabase, user } = await updateSession(request);
   if (!allowedRoles) return response;
 

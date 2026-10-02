@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireActionRole } from "@/lib/auth/server";
 
 export type ResourceActionResult = { ok: true; message: string } | { ok: false; message: string };
@@ -37,6 +37,7 @@ function databaseMessage(error: unknown) {
 }
 
 function refreshResources(campaignSlug?: string | null) {
+  revalidateTag("public-resources");
   revalidatePath("/donate-items");
   revalidatePath("/admin");
   if (campaignSlug) revalidatePath(`/campaigns/${campaignSlug}`);

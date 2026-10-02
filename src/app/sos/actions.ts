@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { headers } from "next/headers";
 import { getCurrentAuth } from "@/lib/auth/server";
 import { uploadToCloudinary } from "@/lib/cloudinary/server";
@@ -138,12 +138,14 @@ export async function submitSosReport(formData: FormData): Promise<SosActionResu
     });
     if (requestError) {
       console.error("SOS fundraising request failed", { reportId, code: requestError.code });
+      revalidateTag("public-sos");
       revalidatePath("/sos");
       revalidatePath("/admin");
       return { ok: true, message: "Tín hiệu SOS đã được ghi nhận, nhưng đề xuất gây quỹ chưa lưu được. Vui lòng liên hệ Admin; không cần gửi lại SOS." };
     }
   }
 
+  revalidateTag("public-sos");
   revalidatePath("/sos");
   revalidatePath("/admin");
   return {

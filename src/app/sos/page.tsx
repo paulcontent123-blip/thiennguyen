@@ -1,10 +1,11 @@
 import { SiteHeader } from "@/components/site-header";
+import { unstable_cache } from "next/cache";
 import { RescueApplyModal } from "@/components/rescue/rescue-apply-modal";
 import { SosBoard, type SosBoardReport } from "@/components/sos/sos-board";
 import { SosReportModal } from "@/components/sos/sos-report-modal";
 import { getCurrentAuth } from "@/lib/auth/server";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
-import { createClient } from "@/lib/supabase/server";
+import { createPublicClient } from "@/lib/supabase/public";
 import type { SosTeamResponse } from "@/lib/sos/team-progress";
 
 const teamStatusLabels: Record<string, { label: string; className: string }> = {
@@ -22,12 +23,12 @@ type PublicRescueTeam = {
   status: string;
 };
 
-async function getSosReports(): Promise<SosBoardReport[]> {
-  if (!hasSupabaseEnv()) return [];
-  const supabase = createClient();
-  const [{ data }, { data: responses }] = await Promise.all([
+async function queryPublicSosData(): Promise<{ reports: SosBoardReport[]; rescueTeams: PublicRescueTeam[] }> {
+  const supabase = createPublicClient();
+  const [{ data }, { data: responses }, { data: rescueTeams }] = await Promise.all([
     supabase.rpc("get_public_sos_reports"),
     supabase.rpc("get_public_sos_team_responses"),
+    supabase.rpc("get_public_rescue_teams"),
   ]);
   const byReport = new Map<string, SosTeamResponse[]>();
   for (const row of (responses ?? []) as (SosTeamResponse & { sos_report_id: string })[]) {
@@ -36,18 +37,23 @@ async function getSosReports(): Promise<SosBoardReport[]> {
       { team_name: row.team_name, member_kind: row.member_kind, progress: row.progress, updated_at: row.updated_at },
     ]);
   }
-  return ((data ?? []) as SosBoardReport[]).map((report) => ({ ...report, team_responses: byReport.get(report.id) ?? [] }));
+  return {
+    reports: ((data ?? []) as SosBoardReport[]).map((report) => ({ ...report, team_responses: byReport.get(report.id) ?? [] })),
+    rescueTeams: (rescueTeams ?? []) as PublicRescueTeam[],
+  };
 }
 
-async function getActiveRescueTeams(): Promise<PublicRescueTeam[]> {
-  if (!hasSupabaseEnv()) return [];
-  const supabase = createClient();
-  const { data } = await supabase.rpc("get_public_rescue_teams");
-  return (data ?? []) as PublicRescueTeam[];
-}
+const getCachedPublicSosData = unstable_cache(queryPublicSosData, ["public-sos-v1"], {
+  revalidate: 15,
+  tags: ["public-sos"],
+});
 
 export default async function SosPage() {
-  const [{ user }, reports, rescueTeams] = await Promise.all([getCurrentAuth(), getSosReports(), getActiveRescueTeams()]);
+  const [{ user }, publicData] = await Promise.all([
+    getCurrentAuth(),
+    hasSupabaseEnv() ? getCachedPublicSosData() : Promise.resolve({ reports: [], rescueTeams: [] }),
+  ]);
+  const { reports, rescueTeams } = publicData;
   const activeCount = reports.filter((report) => report.status !== "handled").length;
 
   return (

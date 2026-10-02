@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CampaignCard } from "@/components/campaign-card";
 import { SiteHeader } from "@/components/site-header";
+import { getCurrentAuth } from "@/lib/auth/server";
 import { getCampaignFollowStates } from "@/lib/campaigns/follows";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
@@ -36,7 +37,7 @@ export default async function PublicOrganizationPage({
   const page = Number.isSafeInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
   const from = (page - 1) * PAGE_SIZE;
 
-  const [campaignResult, activeResult, authResult] = await Promise.all([
+  const [campaignResult, activeResult, auth] = await Promise.all([
     supabase
       .from("campaigns")
       .select("id, slug, title, summary, target_amount, campaign_type, category, province, status", { count: "exact" })
@@ -52,7 +53,7 @@ export default async function PublicOrganizationPage({
       .eq("organization_id", organization.id)
       .eq("owner_type", "organization")
       .eq("status", "active"),
-    supabase.auth.getUser(),
+    getCurrentAuth(),
   ]);
 
   if (campaignResult.error) throw new Error(campaignResult.error.message);
@@ -78,14 +79,12 @@ export default async function PublicOrganizationPage({
           .eq("is_public", true)
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [], error: null }),
-    authResult.data.user
-      ? supabase.from("profiles").select("role").eq("id", authResult.data.user.id).maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    getCampaignFollowStates(supabase, ids, authResult.data.user?.id),
+    Promise.resolve({ data: auth.role ? { role: auth.role } : null, error: null }),
+    getCampaignFollowStates(supabase, ids, auth.user?.id),
   ]);
   if (mediaResult.error) throw new Error(mediaResult.error.message);
 
-  const viewer = !authResult.data.user ? "guest" : profileResult.data?.role === "donor" ? "donor" : "other";
+  const viewer = !auth.user ? "guest" : profileResult.data?.role === "donor" ? "donor" : "other";
   const covers = new Map<string, string>();
   for (const item of mediaResult.data ?? []) {
     if (!covers.has(item.campaign_id)) covers.set(item.campaign_id, item.url);

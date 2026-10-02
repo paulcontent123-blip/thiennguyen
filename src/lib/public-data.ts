@@ -10,6 +10,11 @@ import type { NewsPost } from "@/lib/news/types";
 const PAGE_SIZE = 9;
 const PUBLIC_STATUSES = ["approved", "active", "closed"] as const;
 const NEWS_SELECT = "id, slug, title, excerpt, content, category, tags, cover_url, status, author_id, published_at, created_at, updated_at, meta_title, meta_description, focus_keyword, canonical_url";
+const NEWS_LIST_SELECT = "id, slug, title, excerpt, category, tags, cover_url, status, published_at, created_at";
+
+export type PublicNewsSummary = Pick<NewsPost,
+  "id" | "slug" | "title" | "excerpt" | "category" | "tags" | "cover_url" | "status" | "published_at" | "created_at"
+>;
 
 export type PublicCampaign = {
   id: string;
@@ -36,7 +41,7 @@ type CampaignFilters = {
 };
 
 type CampaignResult = { campaigns: PublicCampaign[]; total: number };
-type NewsResult = { posts: NewsPost[] };
+type NewsResult = { posts: PublicNewsSummary[] };
 
 function publicSupabase() {
   const { supabaseUrl, supabaseAnonKey } = getSupabaseEnv();
@@ -133,20 +138,21 @@ export async function getPublicCampaigns(filters: CampaignFilters) {
 async function queryNews(): Promise<NewsResult> {
   const { data, error } = await publicSupabase()
     .from("news_posts")
-    .select(NEWS_SELECT)
+    .select(NEWS_LIST_SELECT)
     .eq("status", "published")
     .not("published_at", "is", null)
     .lte("published_at", new Date().toISOString())
-    .order("published_at", { ascending: false });
+    .order("published_at", { ascending: false })
+    .limit(24);
   if (error) throw new Error(error.message);
-  return { posts: (data ?? []) as NewsPost[] };
+  return { posts: (data ?? []) as PublicNewsSummary[] };
 }
 
 const cachedNewsQuery = unstable_cache(queryNews, ["public-news-list-v1"], {
   revalidate: 60,
   tags: ["public-news"],
 });
-let newsStale: NewsPost[] | null = null;
+let newsStale: PublicNewsSummary[] | null = null;
 
 export async function getPublicNews() {
   if (!hasSupabaseEnv()) {

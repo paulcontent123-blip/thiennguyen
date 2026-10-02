@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireActionRole } from "@/lib/auth/server";
 
 export type RescueOperationsResult = { ok: true; message: string } | { ok: false; message: string };
@@ -18,6 +18,7 @@ export async function updateRescueStatus(status: string): Promise<RescueOperatio
   if (error) return { ok: false, message: error.message };
 
   revalidatePath("/rescue/operations");
+  revalidateTag("public-sos");
   return { ok: true, message: "Đã cập nhật trạng thái." };
 }
 
@@ -35,6 +36,7 @@ export async function updateRescueLocation(formData: FormData): Promise<RescueOp
   if (error) return { ok: false, message: error.message };
 
   revalidatePath("/rescue/operations");
+  revalidateTag("public-sos");
   return { ok: true, message: "Đã cập nhật vị trí hiện tại." };
 }
 
@@ -44,6 +46,7 @@ export async function acknowledgeSosAlert(alertId: string): Promise<RescueOperat
   const { data, error } = await supabase.rpc("acknowledge_sos_team_alert", { p_alert_id: alertId });
   if (error || !data) return { ok: false, message: "Không thể xác nhận cảnh báo này." };
   revalidatePath("/rescue/operations");
+  revalidateTag("public-sos");
   return { ok: true, message: "Đã xác nhận đã xem cảnh báo." };
 }
 
@@ -63,6 +66,7 @@ export async function reportSosProgress(alertId: string, status: string, note: s
   revalidatePath("/rescue/operations");
   revalidatePath("/admin");
   revalidatePath("/admin/sos");
+  revalidateTag("public-sos");
   return {
     ok: true,
     message: data === "closed"

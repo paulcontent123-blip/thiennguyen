@@ -1,11 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { requireActionRole } from "@/lib/auth/server";
 
 export type ResourceAdminResult = { ok: true; message: string } | { ok: false; message: string };
 
 function refreshResourcePages() {
+  revalidateTag("public-resources");
   revalidatePath("/admin");
   revalidatePath("/admin/resources");
   revalidatePath("/organization");

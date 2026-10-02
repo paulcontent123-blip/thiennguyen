@@ -1,6 +1,7 @@
 import { DonateItemsPortal, type ManagedCampaign, type ResourceClaim, type ResourceNeed, type ResourceOffer } from "@/components/donate-items/donate-items-portal";
 import { SiteHeader } from "@/components/site-header";
 import { getCurrentAuth } from "@/lib/auth/server";
+import { getPublicResourceDirectory } from "@/lib/resources/public";
 import { createClient } from "@/lib/supabase/server";
 
 function relation<T>(value: T | T[] | null | undefined): T | null {
@@ -9,15 +10,11 @@ function relation<T>(value: T | T[] | null | undefined): T | null {
 
 export default async function DonateItemsPage() {
   const supabase = createClient();
-  const auth = await getCurrentAuth();
-  const [needsResult, offersResult] = await Promise.all([
-    supabase.rpc("get_public_resource_needs"),
-    supabase.rpc("get_public_resource_offers"),
-  ]);
-
-  const publicNeeds = (needsResult.data ?? []) as ResourceNeed[];
-  const publicOffers = (offersResult.data ?? []) as ResourceOffer[];
-  const loadError = needsResult.error || offersResult.error
+  const [auth, publicDirectory] = await Promise.all([getCurrentAuth(), getPublicResourceDirectory()]);
+  // Giữ tương thích trong khoảng thời gian migration hiệu năng chưa được push.
+  const publicNeeds = publicDirectory.needs as ResourceNeed[];
+  const publicOffers = publicDirectory.offers as ResourceOffer[];
+  const loadError = publicDirectory.hasError
     ? "Chưa đọc được dữ liệu nguồn lực. Hãy bảo đảm các migration nguồn lực 202609240006 và 202609240010 đã được áp dụng."
     : null;
 
@@ -32,13 +29,15 @@ export default async function DonateItemsPage() {
         .select("id, resource_type, title, description, quantity, unit, estimated_value_vnd, province, available_from, radius_km, status, created_at, matched_need_id, contact_name, contact_email, contact_phone")
         .eq("user_id", auth.user.id)
         .eq("owner_hidden", false)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(100),
       supabase
         .from("resource_claims")
         .select("id, need_id, offer_id, quantity, status, expires_at, coordination_note, actual_value_vnd, confirmed_at, created_at, resource_needs(name, unit, campaigns(title, slug))")
         .eq("contributor_id", auth.user.id)
         .eq("owner_hidden", false)
-        .order("created_at", { ascending: false }),
+        .order("created_at", { ascending: false })
+        .limit(100),
     ]);
     ownOffers = (ownOffersResult.data ?? []) as ResourceOffer[];
     ownClaims = ((ownClaimsResult.data ?? []) as unknown[]).map((row) => {
@@ -64,15 +63,15 @@ export default async function DonateItemsPage() {
     });
 
     if (auth.role === "admin") {
-      const { data } = await supabase.from("campaigns").select("id, title, slug, status, province").in("status", ["approved", "active"]).order("created_at", { ascending: false });
+      const { data } = await supabase.from("campaigns").select("id, title, slug, status, province").in("status", ["approved", "active"]).order("created_at", { ascending: false }).limit(100);
       managedCampaigns = (data ?? []) as ManagedCampaign[];
     } else if (auth.role === "donor") {
-      const { data } = await supabase.from("campaigns").select("id, title, slug, status, province").eq("owner_type", "individual").eq("owner_user_id", auth.user.id).in("status", ["approved", "active"]).order("created_at", { ascending: false });
+      const { data } = await supabase.from("campaigns").select("id, title, slug, status, province").eq("owner_type", "individual").eq("owner_user_id", auth.user.id).in("status", ["approved", "active"]).order("created_at", { ascending: false }).limit(100);
       managedCampaigns = (data ?? []) as ManagedCampaign[];
     } else if (auth.role === "org") {
       const { data: organization } = await supabase.from("organizations").select("id").eq("user_id", auth.user.id).maybeSingle();
       if (organization) {
-        const { data } = await supabase.from("campaigns").select("id, title, slug, status, province").eq("organization_id", organization.id).in("status", ["approved", "active"]).order("created_at", { ascending: false });
+        const { data } = await supabase.from("campaigns").select("id, title, slug, status, province").eq("organization_id", organization.id).in("status", ["approved", "active"]).order("created_at", { ascending: false }).limit(100);
         managedCampaigns = (data ?? []) as ManagedCampaign[];
       }
     }

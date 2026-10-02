@@ -39,27 +39,30 @@ export function NotificationBell({ userId }: { userId: string }) {
   const supabase = createClient();
 
   const fetchNotifications = useCallback(async () => {
-    const [{ data }, { count }] = await Promise.all([
-      supabase
-        .from("notifications")
-        .select("id, category, title, body, link, read_at, created_at")
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .limit(30),
-      supabase
-        .from("notifications")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", userId)
-        .is("read_at", null),
-    ]);
-    setItems(data ?? []);
-    setUnreadCount(count ?? 0);
+    const { data, error } = await supabase.rpc("get_my_notification_feed", { p_limit: 30 });
+    if (error) {
+      // Compatibility while the read-performance migration is being deployed.
+      const [{ data: fallbackItems }, { count }] = await Promise.all([
+        supabase.from("notifications").select("id, category, title, body, link, read_at, created_at")
+          .eq("user_id", userId).order("created_at", { ascending: false }).limit(30),
+        supabase.from("notifications").select("id", { count: "exact", head: true })
+          .eq("user_id", userId).is("read_at", null),
+      ]);
+      setItems((fallbackItems ?? []) as NotificationRow[]);
+      setUnreadCount(count ?? 0);
+      return;
+    }
+    const feed = (data ?? {}) as { items?: NotificationRow[]; unread_count?: number | string };
+    setItems(feed.items ?? []);
+    setUnreadCount(Number(feed.unread_count ?? 0));
   }, [supabase, userId]);
 
   useEffect(() => setMounted(true), []);
   useEffect(() => {
     fetchNotifications();
-    const interval = window.setInterval(fetchNotifications, POLL_INTERVAL_MS);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") fetchNotifications();
+    }, POLL_INTERVAL_MS);
     return () => window.clearInterval(interval);
   }, [fetchNotifications]);
 

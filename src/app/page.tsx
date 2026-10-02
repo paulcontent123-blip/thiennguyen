@@ -1,34 +1,30 @@
 import Link from "next/link";
+import { unstable_cache } from "next/cache";
 import { SiteHeader } from "@/components/site-header";
 import { CampaignCard, type CampaignCardData } from "@/components/campaign-card";
+import { getCurrentAuth } from "@/lib/auth/server";
 import { getCampaignFollowStates, type CampaignFollowState } from "@/lib/campaigns/follows";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
+import { createPublicClient } from "@/lib/supabase/public";
 import { createClient } from "@/lib/supabase/server";
 import { getHomepageStats } from "@/lib/stats/homepage-stats";
 
-type CampaignOwnerType = "organization" | "individual";
-
-async function getCampaigns(ownerType?: CampaignOwnerType): Promise<CampaignCardData[]> {
-  if (!hasSupabaseEnv()) return [];
-
-  const supabase = createClient();
-  let campaignsQuery = supabase
-    .from("campaigns")
-    .select("id, slug, title, summary, target_amount, category, province, owner_type")
-    .eq("status", "active")
-    .order("published_at", { ascending: false })
-    .limit(ownerType === "individual" ? 4 : 8);
-
-  if (ownerType) campaignsQuery = campaignsQuery.eq("owner_type", ownerType);
-
-  const { data, error } = await campaignsQuery;
-  if (error) {
-    console.error("Failed to load homepage campaigns", error);
-    return [];
+async function queryHomepageCampaigns(): Promise<{ campaigns: CampaignCardData[]; personalCampaigns: CampaignCardData[] }> {
+  const supabase = createPublicClient();
+  const [organizationResult, personalResult] = await Promise.all([
+    supabase.from("campaigns").select("id, slug, title, summary, target_amount, category, province, owner_type")
+      .eq("status", "active").eq("owner_type", "organization").order("published_at", { ascending: false }).limit(8),
+    supabase.from("campaigns").select("id, slug, title, summary, target_amount, category, province, owner_type")
+      .eq("status", "active").eq("owner_type", "individual").order("published_at", { ascending: false }).limit(4),
+  ]);
+  if (organizationResult.error || personalResult.error) {
+    throw organizationResult.error ?? personalResult.error;
   }
 
-  const rows = data ?? [];
-  if (rows.length === 0) return [];
+  const organizationRows = organizationResult.data ?? [];
+  const personalRows = personalResult.data ?? [];
+  const rows = [...organizationRows, ...personalRows];
+  if (rows.length === 0) return { campaigns: [], personalCampaigns: [] };
 
   const campaignIds = rows.map((row) => row.id);
   // Media và tổng tiền đã nhận chỉ phụ thuộc campaignIds, không phụ thuộc nhau -> chạy song song.
@@ -57,7 +53,7 @@ async function getCampaigns(ownerType?: CampaignOwnerType): Promise<CampaignCard
     ),
   );
 
-  return rows.map((row) => ({
+  const cards = new Map(rows.map((row) => [row.id, {
     id: row.id,
     slug: row.slug,
     title: row.title,
@@ -68,8 +64,17 @@ async function getCampaigns(ownerType?: CampaignOwnerType): Promise<CampaignCard
     ownerType: row.owner_type,
     coverUrl: coverByCampaign.get(row.id) ?? null,
     receivedAmount: receivedByCampaign.get(row.id) ?? 0,
-  }));
+  } satisfies CampaignCardData]));
+  return {
+    campaigns: organizationRows.flatMap((row) => cards.get(row.id) ?? []),
+    personalCampaigns: personalRows.flatMap((row) => cards.get(row.id) ?? []),
+  };
 }
+
+const getHomepageCampaigns = unstable_cache(queryHomepageCampaigns, ["homepage-campaigns-v1"], {
+  revalidate: 60,
+  tags: ["public-campaigns", "public-stats"],
+});
 
 const currency = new Intl.NumberFormat("vi-VN");
 
@@ -102,22 +107,19 @@ const howSteps = [
 ] as const;
 
 export default async function HomePage() {
-  const [campaigns, personalCampaigns, homepageStats] = await Promise.all([
-    getCampaigns(),
-    getCampaigns("individual"),
+  const [campaignGroups, homepageStats, auth] = await Promise.all([
+    hasSupabaseEnv() ? getHomepageCampaigns() : Promise.resolve({ campaigns: [], personalCampaigns: [] }),
     getHomepageStats(),
+    getCurrentAuth(),
   ]);
+  const { campaigns, personalCampaigns } = campaignGroups;
   let followViewer: "guest" | "donor" | "other" = "guest";
   let followStates: Record<string, CampaignFollowState> = {};
   if (hasSupabaseEnv()) {
     const supabase = createClient();
-    const { data: authData } = await supabase.auth.getUser();
-    const { data: profile } = authData.user
-      ? await supabase.from("profiles").select("role").eq("id", authData.user.id).maybeSingle()
-      : { data: null };
-    followViewer = !authData.user ? "guest" : profile?.role === "donor" ? "donor" : "other";
+    followViewer = !auth.user ? "guest" : auth.role === "donor" ? "donor" : "other";
     const ids = [...campaigns, ...personalCampaigns].flatMap((campaign) => campaign.id ? [campaign.id] : []);
-    followStates = await getCampaignFollowStates(supabase, ids, followViewer === "donor" ? authData.user?.id : undefined);
+    followStates = await getCampaignFollowStates(supabase, ids, followViewer === "donor" ? auth.user?.id : undefined);
   }
   const [heroMain, ...heroRest] = campaigns;
   const heroSub = heroRest.slice(0, 2);

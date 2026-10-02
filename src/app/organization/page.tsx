@@ -51,8 +51,8 @@ export default async function OrganizationPage({ searchParams }: { searchParams?
     .order("created_at", { ascending: false });
   const resourceCampaigns = (resourceCampaignRows ?? []) as ManagedCampaign[];
   const resourceCampaignIds = resourceCampaigns.map((campaign) => campaign.id);
-  const [publicNeedsResult, managedNeedsResult] = await Promise.all([
-    supabase.rpc("get_public_resource_needs"),
+  const [progressResult, managedNeedsResult] = await Promise.all([
+    supabase.rpc("get_managed_resource_need_progress", { p_campaign_ids: resourceCampaignIds }),
     resourceCampaignIds.length
       ? supabase
           .from("resource_needs")
@@ -61,11 +61,18 @@ export default async function OrganizationPage({ searchParams }: { searchParams?
           .order("created_at", { ascending: false })
       : Promise.resolve({ data: [] }),
   ]);
-  const publicNeeds = (publicNeedsResult.data ?? []) as ResourceNeed[];
+  let progressRows = (progressResult.data ?? []) as { need_id: string; claimed_quantity: number | string; committed_quantity: number | string }[];
+  if (progressResult.error) {
+    const fallback = await supabase.rpc("get_public_resource_needs");
+    progressRows = ((fallback.data ?? []) as ResourceNeed[])
+      .filter((item) => resourceCampaignIds.includes(item.campaign_id))
+      .map((item) => ({ need_id: item.id, claimed_quantity: item.claimed_quantity, committed_quantity: item.committed_quantity ?? item.claimed_quantity }));
+  }
+  const progressByNeed = new Map(progressRows.map((item) => [item.need_id, item] as const));
   const resourceNeeds = ((managedNeedsResult.data ?? []) as unknown[]).map((row) => {
     const item = row as Record<string, unknown>;
     const campaign = relation(item.campaigns as { title: string; slug: string; province: string | null } | { title: string; slug: string; province: string | null }[] | null);
-    const publicNeed = publicNeeds.find((need) => need.id === item.id);
+    const progress = progressByNeed.get(String(item.id));
     return {
       id: String(item.id),
       campaign_id: String(item.campaign_id),
@@ -84,8 +91,8 @@ export default async function OrganizationPage({ searchParams }: { searchParams?
       campaign_title: campaign?.title ?? "Chiến dịch",
       campaign_slug: campaign?.slug ?? "",
       campaign_province: campaign?.province ?? null,
-      claimed_quantity: Number(publicNeed?.claimed_quantity ?? 0),
-      committed_quantity: Number(publicNeed?.committed_quantity ?? publicNeed?.claimed_quantity ?? 0),
+      claimed_quantity: Number(progress?.claimed_quantity ?? 0),
+      committed_quantity: Number(progress?.committed_quantity ?? progress?.claimed_quantity ?? 0),
     } satisfies ResourceNeed;
   });
 

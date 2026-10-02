@@ -2,11 +2,12 @@ import "server-only";
 
 import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import { hasSupabaseEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 import { APP_ROLES, isAppRole, type AppRole } from "./roles";
 
-async function readAuthenticatedUser() {
+const readAuthenticatedUser = cache(async () => {
   const supabase = createClient();
   const {
     data: { user },
@@ -22,7 +23,7 @@ async function readAuthenticatedUser() {
     role: isAppRole(profile?.role) ? profile.role : null,
     fullName: profile?.full_name?.trim() || null,
   };
-}
+});
 
 export async function getCurrentAuth(): Promise<{ user: User | null; role: AppRole | null; fullName: string | null }> {
   if (!hasSupabaseEnv()) return { user: null, role: null, fullName: null };

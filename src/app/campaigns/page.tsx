@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CampaignCard } from "@/components/campaign-card";
 import { SiteHeader } from "@/components/site-header";
+import { getCurrentAuth } from "@/lib/auth/server";
 import { CAMPAIGN_CATEGORIES } from "@/lib/campaigns/categories";
 import { getCampaignFollowStates, type CampaignFollowState } from "@/lib/campaigns/follows";
 import { PROVINCES } from "@/lib/geo/provinces";
@@ -42,29 +43,28 @@ function buildPageHref(searchParams: SearchParams, page: number) {
 
 export default async function CampaignsPage({ searchParams = {} }: { searchParams?: SearchParams }) {
   const requestedPage = getPage(firstParam(searchParams.page));
-  const campaignResult = await getPublicCampaigns({
-    query: firstParam(searchParams.q) ?? "",
-    category: firstParam(searchParams.category) ?? "",
-    province: firstParam(searchParams.province) ?? "",
-    type: firstParam(searchParams.type) ?? "",
-    owner: firstParam(searchParams.owner) ?? "",
-    page: requestedPage,
-  });
+  const [campaignResult, auth] = await Promise.all([
+    getPublicCampaigns({
+      query: firstParam(searchParams.q) ?? "",
+      category: firstParam(searchParams.category) ?? "",
+      province: firstParam(searchParams.province) ?? "",
+      type: firstParam(searchParams.type) ?? "",
+      owner: firstParam(searchParams.owner) ?? "",
+      page: requestedPage,
+    }),
+    getCurrentAuth(),
+  ]);
   const { campaigns, total, stale, error: dataError } = campaignResult;
   let viewer: "guest" | "donor" | "other" = "guest";
   let followStates: Record<string, CampaignFollowState> = {};
   if (hasSupabaseEnv()) {
     try {
       const supabase = createClient();
-      const { data: authData } = await supabase.auth.getUser();
-      const { data: profile } = authData.user
-        ? await supabase.from("profiles").select("role").eq("id", authData.user.id).maybeSingle()
-        : { data: null };
-      viewer = !authData.user ? "guest" : profile?.role === "donor" ? "donor" : "other";
+      viewer = !auth.user ? "guest" : auth.role === "donor" ? "donor" : "other";
       followStates = await getCampaignFollowStates(
         supabase,
         campaigns.map((campaign) => campaign.id),
-        viewer === "donor" ? authData.user?.id : undefined,
+        viewer === "donor" ? auth.user?.id : undefined,
       );
     } catch (authError) {
       console.warn("Campaign viewer data unavailable", authError);

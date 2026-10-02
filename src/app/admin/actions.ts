@@ -366,6 +366,7 @@ export async function approveCampaign(id: string) {
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
   await notifyCampaignOwner(supabase, data, "approved", "Đã duyệt");
   revalidateTag("public-campaigns");
+  revalidateTag("public-stats");
   revalidatePath("/admin");
   revalidatePath("/organization");
 }
@@ -385,6 +386,7 @@ export async function requestCampaignRevision(id: string, formData: FormData) {
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
   await notifyCampaignOwner(supabase, data, "needs_revision", "Cần chỉnh sửa", note);
   revalidateTag("public-campaigns");
+  revalidateTag("public-stats");
   revalidatePath("/admin");
   revalidatePath("/organization");
 }
@@ -404,6 +406,7 @@ export async function rejectCampaign(id: string, formData: FormData) {
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái chờ duyệt.");
   await notifyCampaignOwner(supabase, data, "rejected", "Từ chối", note);
   revalidateTag("public-campaigns");
+  revalidateTag("public-stats");
   revalidatePath("/admin");
   revalidatePath("/organization");
 }
@@ -421,6 +424,7 @@ export async function activateCampaign(id: string) {
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái đã duyệt.");
   await notifyCampaignOwner(supabase, data, "active", "Đang hoạt động");
   revalidateTag("public-campaigns");
+  revalidateTag("public-stats");
   revalidatePath("/admin");
   revalidatePath("/organization");
   revalidatePath("/");
@@ -439,6 +443,8 @@ export async function closeCampaign(id: string) {
   if (!data) throw new Error("Chiến dịch không còn ở trạng thái hoạt động.");
   await notifyCampaignOwner(supabase, data, "closed", "Đã đóng");
   revalidateTag("public-campaigns");
+  revalidateTag("public-stats");
+  revalidateTag("public-reports");
   revalidatePath("/admin");
   revalidatePath("/organization");
   revalidatePath(`/campaign-closure/${id}`);
@@ -553,6 +559,7 @@ export async function postAuditDisbursement(id: string, result: "valid" | "needs
     .maybeSingle();
   assertMutationSucceeded(error, "Không thể cập nhật kết quả hậu kiểm.");
   if (!data) throw new Error("Hồ sơ không còn ở trạng thái chờ hậu kiểm.");
+  revalidateTag("public-reports");
   revalidatePath("/admin");
   revalidatePath(`/organization/campaigns/${data.campaign_id}`);
   revalidatePath("/reports");
@@ -978,6 +985,7 @@ export async function reviewAnonymousSosReport(id: string, decision: "needs_supp
     .maybeSingle();
   assertMutationSucceeded(error, "Không thể cập nhật báo cáo SOS.");
   if (!data) throw new Error("Báo cáo không còn ở trạng thái chờ xác nhận.");
+  revalidateTag("public-sos");
   revalidatePath("/admin");
   revalidatePath("/sos");
   revalidatePath("/rescue/operations");
@@ -990,6 +998,7 @@ export async function markSosHandled(id: string) {
     .update({ status: "handled", handled_at: new Date().toISOString(), handled_by: user.id })
     .eq("id", id);
   assertMutationSucceeded(error, "Không thể cập nhật SOS report.");
+  revalidateTag("public-sos");
   revalidatePath("/admin");
   revalidatePath("/rescue/operations");
 }

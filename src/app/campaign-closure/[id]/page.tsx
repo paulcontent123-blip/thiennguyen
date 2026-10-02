@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ClosureExportButtons } from "@/components/reports/closure-export-buttons";
 import { SiteHeader } from "@/components/site-header";
 import { getCurrentAuth } from "@/lib/auth/server";
+import { getPublicCampaignResourceNeeds } from "@/lib/resources/public";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -63,10 +64,10 @@ export default async function CampaignClosurePage({ params }: { params: { id: st
       .order("post_audited_at", { ascending: true })
     : supabase.rpc("get_public_campaign_disbursements", { p_campaign_id: campaign.id });
 
-  const [summaryResult, disbursementResult, resourceResult, historyResult] = await Promise.all([
+  const [summaryResult, disbursementResult, resourceRows, historyResult] = await Promise.all([
     supabase.rpc("get_campaign_closure_summary", { p_campaign_id: campaign.id }),
     disbursementQuery,
-    supabase.rpc("get_public_resource_needs"),
+    getPublicCampaignResourceNeeds(campaign.id),
     supabase.from("campaign_status_history").select("id, to_status, actor_name, actor_role, note, created_at").eq("campaign_id", campaign.id).order("created_at", { ascending: true }),
   ]);
 
@@ -82,7 +83,7 @@ export default async function CampaignClosurePage({ params }: { params: { id: st
     representative_approved_at: item.representative_approved_at ? String(item.representative_approved_at) : null,
     post_audited_at: item.post_audited_at ? String(item.post_audited_at) : null,
   })) satisfies PublicDisbursement[];
-  const needs = ((resourceResult.data ?? []) as Array<Record<string, unknown>>).filter((item) => item.campaign_id === campaign.id);
+  const needs = resourceRows as Array<Record<string, unknown>>;
   const totalReceived = Number(summary.total_received_vnd ?? 0);
   const totalDisbursed = Number(summary.total_disbursed_vnd ?? 0);
   const balance = totalReceived - totalDisbursed;

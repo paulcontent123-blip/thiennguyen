@@ -473,7 +473,10 @@ function AuditTimeline({ disbursement }: { disbursement: Disbursement }) {
 
 export function AdminPortal({ campaigns, organizations, personalProfiles, disbursements, rescueApplications, rescueTeams, rescueInvitations, sosReports, receivingAccounts, vnpayGatewayInfo, transactions, corporateInquiries, resourceNeeds, resourceOffers, resourceClaims, resourceLoadError, newsPosts, newsMedia, newsEditorLoadError, walletTopups = [], walletTopupIssues = [], walletAllocations = [], initialPanel, sosAwaitingClosure = 0 }: { walletTopups?: AdminWalletTopup[]; walletTopupIssues?: AdminWalletTopupIssue[]; walletAllocations?: AdminWalletAllocation[]; initialPanel?: Panel; sosAwaitingClosure?: number; newsPosts: NewsPost[]; newsMedia: NewsMediaAsset[]; newsEditorLoadError: string | null; corporateInquiries: CorporateInquiry[]; campaigns: Campaign[]; organizations: Organization[]; personalProfiles: PersonalProfile[]; disbursements: Disbursement[]; rescueApplications: RescueApplication[]; rescueTeams: RescueTeam[]; rescueInvitations: RescueInvitation[]; sosReports: SosReport[]; receivingAccounts: ReceivingAccount[]; vnpayGatewayInfo: VnpayGatewayInfo; transactions: Transaction[]; resourceNeeds: AdminResourceNeed[]; resourceOffers: AdminResourceOffer[]; resourceClaims: AdminResourceClaim[]; resourceLoadError: string | null }) {
   const router = useRouter();
-  const [panel, setPanel] = useState<Panel>(initialPanel ?? "overview");
+  const panel = initialPanel ?? "overview";
+  const setPanel = (nextPanel: Panel) => {
+    router.push(nextPanel === "overview" ? "/admin" : `/admin?panel=${nextPanel}`);
+  };
   const [campaignFilter, setCampaignFilter] = useState<CampaignFilter>("all");
   const [campaignProvinceFilter, setCampaignProvinceFilter] = useState<string>("");
   const [auditFilter, setAuditFilter] = useState<AuditFilter>("pending");
@@ -522,7 +525,6 @@ export function AdminPortal({ campaigns, organizations, personalProfiles, disbur
     <div className="min-h-screen bg-paperMid lg:grid lg:grid-cols-[220px_minmax(0,1fr)]">
       <AdminSidebar
         active={panel}
-        onSelect={setPanel}
         labels={{
           corporate: newCorporateInquiries ? `Yêu cầu doanh nghiệp (${newCorporateInquiries})` : undefined,
           sos: pendingSos || sosAwaitingClosure ? `SOS Reports (${[pendingSos ? `${pendingSos} chờ` : "", sosAwaitingClosure ? `${sosAwaitingClosure} báo xong` : ""].filter(Boolean).join(", ")})` : undefined,

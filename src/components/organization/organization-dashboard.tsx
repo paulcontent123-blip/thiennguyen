@@ -218,7 +218,7 @@ export function OrganizationDashboard({ organization, campaigns, history, page, 
                       <button type="submit" disabled={busy !== null} className="rounded-[6px] bg-sky px-3 py-2 text-xs font-bold text-white disabled:opacity-50">{busy === `edit-${campaign.id}` ? "Đang lưu…" : "Lưu chỉnh sửa"}</button>
                     </form>
                   </details>
-                </div> : <span className="text-xs text-inkSoft">Nội dung đã khóa</span>}
+                </div> : null}
               </td>
             </tr>;
           })}</tbody></table></div>
